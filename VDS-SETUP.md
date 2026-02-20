@@ -1,10 +1,11 @@
 # 🚀 Настройка VDS для Tarot Mini App
 
-## 📋 Требования
+## 📋 Параметры
 
+- **Домен:** goldtarot.ru, www.goldtarot.ru
+- **IP сервера:** 89.125.59.117
+- **Email:** romabo51@gmail.com
 - **ОС:** Ubuntu 22.04
-- **Домен:** Куплен и направлен на IP сервера
-- **Доступ:** SSH доступ к серверу
 
 ---
 
@@ -12,7 +13,7 @@
 
 ```bash
 # Подключитесь к серверу
-ssh user@your-vds-ip
+ssh root@89.125.59.117
 ```
 
 ---
@@ -23,11 +24,11 @@ ssh user@your-vds-ip
 # Перейдите в домашнюю директорию
 cd ~
 
-# Скачайте скрипт (замените ссылку на ваш репозиторий)
+# Скачайте скрипт из репозитория
 wget https://raw.githubusercontent.com/adolfass/miniapp_taro/main/setup-vds.sh
 
 # Или скопируйте через scp с локальной машины:
-# scp setup-vds.sh user@your-vds-ip:~/
+# scp setup-vds.sh root@89.125.59.117:~/
 ```
 
 ---
@@ -38,7 +39,8 @@ wget https://raw.githubusercontent.com/adolfass/miniapp_taro/main/setup-vds.sh
 # Сделайте скрипт исполняемым
 chmod +x setup-vds.sh
 
-# Запустите настройку
+# Запустите настройку (нужны root права)
+sudo -i
 ./setup-vds.sh
 ```
 
@@ -54,27 +56,13 @@ chmod +x setup-vds.sh
 
 ---
 
-## 🔧 Шаг 4: Редактирование конфигурации
+## 🔧 Шаг 4: Первый деплой
 
-После запуска скрипта отредактируйте конфиг Nginx:
-
-```bash
-sudo nano /etc/nginx/sites-available/tarot-miniapp
-```
-
-**Замените:**
-- `YOUR_DOMAIN.COM` → `ваш-домен.com`
-- `your-email@example.com` → `ваш email`
-
-**Сохраните:** `Ctrl+O` → `Enter` → `Ctrl+X`
-
----
-
-## 🔧 Шаг 5: Первый деплой
+После выполнения скрипта:
 
 ```bash
 # Запустите скрипт деплоя
-sudo /var/www/deploy.sh
+/var/www/deploy.sh
 ```
 
 Скрипт:
@@ -85,11 +73,12 @@ sudo /var/www/deploy.sh
 
 ---
 
-## 🔧 Шаг 6: Проверка
+## 🔧 Шаг 5: Проверка
 
 Откройте в браузере:
 ```
-https://ваш-домен.com
+https://goldtarot.ru
+https://www.goldtarot.ru
 ```
 
 **Что проверить:**
@@ -106,23 +95,28 @@ https://ваш-домен.com
 ### Логи Nginx
 ```bash
 # Просмотр логов в реальном времени
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
+tail -f /var/log/nginx/access.log
+tail -f /var/log/nginx/error.log
 ```
 
 ### Статус Nginx
 ```bash
-sudo systemctl status nginx
+systemctl status nginx
 ```
 
 ### Перезапуск Nginx
 ```bash
-sudo systemctl restart nginx
+systemctl restart nginx
 ```
 
 ### Обновление приложения
 ```bash
-sudo /var/www/deploy.sh
+/var/www/deploy.sh
+```
+
+### Проверка SSL сертификата
+```bash
+certbot certificates
 ```
 
 ---
@@ -133,7 +127,7 @@ sudo /var/www/deploy.sh
 
 ```bash
 # Проверка фаервола
-sudo ufw status
+ufw status
 
 # Должно быть:
 # Status: active
@@ -150,18 +144,19 @@ sudo ufw status
 ### Ошибка при получении сертификата
 ```bash
 # Проверьте, что домен указывает на сервер
-ping ваш-домен.com
+dig goldtarot.ru
+dig www.goldtarot.ru
 
-# Должен вернуться IP вашего сервера
+# Должен вернуться IP: 89.125.59.117
 ```
 
 ### Ошибка Nginx
 ```bash
 # Проверка конфигурации
-sudo nginx -t
+nginx -t
 
 # Перезагрузка с проверкой
-sudo systemctl reload nginx
+systemctl reload nginx
 ```
 
 ### Ошибка при деплое
@@ -171,14 +166,19 @@ cd /var/www/tarot-miniapp
 npm run build 2>&1 | tee build.log
 ```
 
+### Принудительное перевыпуск SSL
+```bash
+certbot --nginx -d goldtarot.ru -d www.goldtarot.ru --force-renewal
+```
+
 ---
 
 ## 📞 Поддержка
 
 Если возникли проблемы:
 1. Проверьте логи: `/var/log/nginx/error.log`
-2. Проверьте статус: `sudo systemctl status nginx`
-3. Перезапустите сервисы: `sudo systemctl restart nginx`
+2. Проверьте статус: `systemctl status nginx`
+3. Проверьте DNS: `dig goldtarot.ru`
 
 ---
 

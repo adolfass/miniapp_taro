@@ -2,68 +2,105 @@
 # ========================================
 # Скрипт настройки сервера для Tarot Mini App
 # Ubuntu 22.04
+# Домен: www.goldtarot.ru
+# Email: romabo51@gmail.com
 # ========================================
 
 set -e  # Остановить при ошибке
 
-echo "🚀 Начало настройки сервера для Tarot Mini App..."
+# Цвета для вывода
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Параметры
+DOMAIN="goldtarot.ru"
+WWW_DOMAIN="www.goldtarot.ru"
+EMAIL="romabo51@gmail.com"
+SERVER_IP="89.125.59.117"
+APP_DIR="/var/www/tarot-miniapp"
+
+echo -e "${BLUE}╔════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   Настройка сервера для Tarot Mini App                ║${NC}"
+echo -e "${BLUE}║   Домен: ${DOMAIN}                      ║${NC}"
+echo -e "${BLUE}║   IP: ${SERVER_IP}                              ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# ========================================
+# 0. Проверка прав root
+# ========================================
+if [ "$EUID" -ne 0 ]; then 
+  echo -e "${RED}❌ Пожалуйста, запустите скрипт от root (sudo -i)${NC}"
+  exit 1
+fi
 
 # ========================================
 # 1. Обновление системы
 # ========================================
-echo "📦 Обновление пакетов..."
-sudo apt update && sudo apt upgrade -y
+echo -e "${YELLOW}📦 [1/10] Обновление пакетов...${NC}"
+apt update && apt upgrade -y
+echo -e "${GREEN}✅ Обновление завершено${NC}"
+echo ""
 
 # ========================================
 # 2. Установка Node.js (версия 20 LTS)
 # ========================================
-echo "📦 Установка Node.js..."
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
+echo -e "${YELLOW}📦 [2/10] Установка Node.js...${NC}"
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
 
 # Проверка версий
-echo "✅ Node.js: $(node -v)"
-echo "✅ npm: $(npm -v)"
+echo -e "${GREEN}✅ Node.js: $(node -v)${NC}"
+echo -e "${GREEN}✅ npm: $(npm -v)${NC}"
+echo ""
 
 # ========================================
 # 3. Установка Nginx
 # ========================================
-echo "📦 Установка Nginx..."
-sudo apt install -y nginx
+echo -e "${YELLOW}📦 [3/10] Установка Nginx...${NC}"
+apt install -y nginx
 
 # Старт и автозапуск
-sudo systemctl start nginx
-sudo systemctl enable nginx
+systemctl start nginx
+systemctl enable nginx
 
-echo "✅ Nginx установлен и запущен"
+echo -e "${GREEN}✅ Nginx установлен и запущен${NC}"
+echo ""
 
 # ========================================
 # 4. Создание директории для приложения
 # ========================================
-echo "📁 Создание директории приложения..."
-sudo mkdir -p /var/www/tarot-miniapp
-sudo chown -R $USER:$USER /var/www/tarot-miniapp
+echo -e "${YELLOW}📁 [4/10] Создание директории приложения...${NC}"
+mkdir -p $APP_DIR
+chown -R www-data:www-data $APP_DIR
+chmod -R 755 $APP_DIR
+
+echo -e "${GREEN}✅ Директория создана: ${APP_DIR}${NC}"
+echo ""
 
 # ========================================
 # 5. Настройка Nginx конфигурации
 # ========================================
-echo "⚙️ Настройка Nginx..."
+echo -e "${YELLOW}⚙️  [5/10] Настройка Nginx...${NC}"
 
-sudo tee /etc/nginx/sites-available/tarot-miniapp > /dev/null <<'EOF'
+cat > /etc/nginx/sites-available/tarot-miniapp << EOF
 server {
     listen 80;
-    server_name YOUR_DOMAIN.COM www.YOUR_DOMAIN.COM;
+    server_name ${DOMAIN} ${WWW_DOMAIN};
 
-    root /var/www/tarot-miniapp;
+    root ${APP_DIR};
     index index.html;
 
     # Для Mini App (SPA)
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files \$uri \$uri/ /index.html;
     }
 
     # Кэширование статики
-    location ~* \.(jpg|jpeg|png|gif|ico|css|js|webp|svg|woff|woff2)$ {
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|webp|svg|woff|woff2|ttf|eot)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
@@ -77,124 +114,176 @@ server {
     
     # Скрытие версии Nginx
     server_tokens off;
+    
+    # Защита от clickjacking
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    
+    # MIME type защита
+    add_header X-Content-Type-Options "nosniff" always;
 }
 EOF
 
-echo "⚠️  Замените YOUR_DOMAIN.COM на ваш домен в файле:"
-echo "   /etc/nginx/sites-available/tarot-miniapp"
+echo -e "${GREEN}✅ Конфигурация Nginx создана${NC}"
+echo -e "${YELLOW}📄 Файл: /etc/nginx/sites-available/tarot-miniapp${NC}"
 echo ""
-read -p "Нажмите Enter после замены..."
 
 # ========================================
 # 6. Активация сайта
 # ========================================
-echo "🔗 Активация сайта..."
-sudo ln -sf /etc/nginx/sites-available/tarot-miniapp /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
+echo -e "${YELLOW}🔗 [6/10] Активация сайта...${NC}"
+ln -sf /etc/nginx/sites-available/tarot-miniapp /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
 
 # Проверка конфигурации
-sudo nginx -t
+nginx -t
 
 # Перезапуск Nginx
-sudo systemctl reload nginx
+systemctl reload nginx
 
-echo "✅ Nginx настроен"
-
-# ========================================
-# 7. Установка Certbot (HTTPS)
-# ========================================
-echo "🔒 Установка Let's Encrypt..."
-sudo apt install -y certbot python3-certbot-nginx
-
-# ========================================
-# 8. Получение SSL сертификата
-# ========================================
-echo "📜 Получение SSL сертификата..."
-echo "⚠️  Убедитесь, что домен указывает на IP этого сервера"
+echo -e "${GREEN}✅ Nginx настроен и перезапущен${NC}"
 echo ""
-read -p "Нажмите Enter для получения сертификата..."
-
-sudo certbot --nginx -d YOUR_DOMAIN.COM -d www.YOUR_DOMAIN.COM --non-interactive --agree-tos --email your-email@example.com
-
-echo "✅ HTTPS настроен"
 
 # ========================================
-# 9. Настройка фаервола
+# 7. Проверка DNS
 # ========================================
-echo "🔥 Настройка UFW фаервола..."
-sudo ufw --force enable
-sudo ufw default allow outgoing
-sudo ufw default deny incoming
-sudo ufw allow OpenSSH
-sudo ufw allow 'Nginx Full'
+echo -e "${YELLOW}🔍 [7/10] Проверка DNS записей...${NC}"
+echo "Проверка домена ${DOMAIN}..."
 
-echo "✅ Фаервол настроен"
+# Получаем IP для домена
+DOMAIN_IP=$(dig +short ${DOMAIN} | head -n1)
+
+if [ "$DOMAIN_IP" == "$SERVER_IP" ]; then
+    echo -e "${GREEN}✅ DNS настроен правильно: ${DOMAIN} → ${SERVER_IP}${NC}"
+else
+    echo -e "${YELLOW}⚠️  DNS может быть ещё не обновлён${NC}"
+    echo "   Ожидаемый IP: ${SERVER_IP}"
+    echo "   Текущий IP: ${DOMAIN_IP:-"не определён"}"
+    echo ""
+    echo -e "${YELLOW}   Если домен только что куплен, подождите 15-60 минут${NC}"
+    echo ""
+    read -p "Продолжить установку SSL? (y/n): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
+echo ""
 
 # ========================================
-# 10. Создание скрипта деплоя
+# 8. Установка Certbot (HTTPS)
 # ========================================
-echo "📝 Создание скрипта деплоя..."
+echo -e "${YELLOW}🔒 [8/10] Установка Let's Encrypt...${NC}"
+apt install -y certbot python3-certbot-nginx
+
+echo -e "${GREEN}✅ Certbot установлен${NC}"
+echo ""
+
+# ========================================
+# 9. Получение SSL сертификата
+# ========================================
+echo -e "${YELLOW}📜 [9/10] Получение SSL сертификата...${NC}"
+echo "Домены: ${DOMAIN}, ${WWW_DOMAIN}"
+echo "Email: ${EMAIL}"
+echo ""
+
+# Получение сертификата
+certbot --nginx \
+    -d ${DOMAIN} \
+    -d ${WWW_DOMAIN} \
+    --non-interactive \
+    --agree-tos \
+    --email ${EMAIL} \
+    --redirect
+
+echo -e "${GREEN}✅ HTTPS настроен${NC}"
+echo ""
+
+# ========================================
+# 10. Настройка фаервола
+# ========================================
+echo -e "${YELLOW}🔥 [10/10] Настройка UFW фаервола...${NC}"
+
+ufw --force enable
+ufw default allow outgoing
+ufw default deny incoming
+ufw allow OpenSSH
+ufw allow 'Nginx Full'
+
+echo -e "${GREEN}✅ Фаервол настроен${NC}"
+echo ""
+
+# ========================================
+# 11. Создание скрипта деплоя
+# ========================================
+echo -e "${YELLOW}📝 [11/11] Создание скрипта деплоя...${NC}"
 
 cat > /var/www/deploy.sh << 'DEPLOY_EOF'
 #!/bin/bash
 set -e
 
-echo "🚀 Начало деплоя..."
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo -e "${YELLOW}🚀 Начало деплоя Tarot Mini App...${NC}"
 
 cd /var/www/tarot-miniapp
 
 # Если это первый деплой - клонируем репозиторий
 if [ ! -d ".git" ]; then
-    echo "📦 Клонирование репозитория..."
+    echo -e "${YELLOW}📦 Клонирование репозитория...${NC}"
     git clone https://github.com/adolfass/miniapp_taro.git .
 fi
 
 # Обновление
-echo "📥 Обновление кода..."
+echo -e "${YELLOW}📥 Обновление кода...${NC}"
 git pull origin main
 
 # Установка зависимостей
-echo "📦 Установка зависимостей..."
+echo -e "${YELLOW}📦 Установка зависимостей...${NC}"
 npm install
 
 # Сборка
-echo "🔨 Сборка проекта..."
+echo -e "${YELLOW}🔨 Сборка проекта...${NC}"
 npm run build
 
 # Проверка Nginx
-echo "✅ Проверка конфигурации Nginx..."
-sudo nginx -t
+echo -e "${YELLOW}✅ Проверка конфигурации Nginx...${NC}"
+nginx -t
 
 # Перезагрузка Nginx
-echo "🔄 Перезагрузка Nginx..."
-sudo systemctl reload nginx
+echo -e "${YELLOW}🔄 Перезагрузка Nginx...${NC}"
+systemctl reload nginx
 
-echo "✅ Деплой завершён успешно!"
-echo "📍 Приложение доступно по адресу: https://YOUR_DOMAIN.COM"
+echo -e "${GREEN}✅ Деплой завершён успешно!${NC}"
+echo -e "${GREEN}📍 Приложение доступно по адресу: https://goldtarot.ru${NC}"
 DEPLOY_EOF
 
 chmod +x /var/www/deploy.sh
 
-echo "✅ Скрипт деплоя создан: /var/www/deploy.sh"
+echo -e "${GREEN}✅ Скрипт деплоя создан: /var/www/deploy.sh${NC}"
+echo ""
 
 # ========================================
-# 11. Вывод информации
+# 12. Вывод информации
 # ========================================
 echo ""
-echo "=========================================="
-echo "✅ Настройка сервера завершена!"
-echo "=========================================="
+echo -e "${GREEN}╔════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║   ✅ Настройка сервера завершена!                     ║${NC}"
+echo -e "${GREEN}╚════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo "📍 Директория приложения: /var/www/tarot-miniapp"
-echo "📍 Скрипт деплоя: /var/www/deploy.sh"
+echo -e "${BLUE}📍 Директория приложения:${NC} ${APP_DIR}"
+echo -e "${BLUE}📍 Скрипт деплоя:${NC} /var/www/deploy.sh"
+echo -e "${BLUE}📍 Домен:${NC} https://${DOMAIN}"
+echo -e "${BLUE}📍 WWW:${NC} https://${WWW_DOMAIN}"
 echo ""
-echo "📋 Следующие шаги:"
-echo "1. Отредактируйте /etc/nginx/sites-available/tarot-miniapp"
-echo "   Замените YOUR_DOMAIN.COM на ваш домен"
+echo -e "${YELLOW}📋 Следующие шаги:${NC}"
+echo "1. Загрузите файлы проекта в ${APP_DIR}"
+echo "2. Или запустите: sudo /var/www/deploy.sh"
 echo ""
-echo "2. Запустите деплой:"
-echo "   sudo /var/www/deploy.sh"
+echo -e "${YELLOW}📊 Полезные команды:${NC}"
+echo "   - Логи Nginx:    tail -f /var/log/nginx/error.log"
+echo "   - Статус:        systemctl status nginx"
+echo "   - Деплой:        /var/www/deploy.sh"
 echo ""
-echo "3. Проверьте сайт: https://YOUR_DOMAIN.COM"
-echo ""
-echo "=========================================="
+echo -e "${GREEN}========================================${NC}"
