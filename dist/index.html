@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Tarot Mini App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script type="module" crossorigin src="/assets/index-CMjCBCtp.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-Bd7muq6h.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Фон со звёздами -->
+    <canvas id="stars-canvas"></canvas>
+    
+    <!-- Canvas для частиц -->
+    <canvas id="particles-canvas"></canvas>
+
+    <!-- Главный экран: колода -->
+    <section id="screen-main" class="screen active">
+      <div class="settings-btn" id="settings-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+          <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+        </svg>
+      </div>
+      
+      <h1 class="title">Таро</h1>
+      
+      <div class="deck-container" id="deck-container">
+        <div class="card-back" id="deck-card"></div>
+      </div>
+      
+      <p class="hint" id="main-hint">Нажмите на колоду для тасовки</p>
+    </section>
+
+    <!-- Экран выбора расклада -->
+    <section id="screen-spreads" class="screen">
+      <h2 class="screen-title">Выберите расклад</h2>
+      
+      <div class="spread-options">
+        <button class="spread-btn" id="daily-spread-btn">
+          <span class="spread-icon">☀️</span>
+          <span class="spread-name">Ежедневный</span>
+          <span class="spread-desc">3 карты</span>
+        </button>
+        
+        <button class="spread-btn" id="situation-spread-btn">
+          <span class="spread-icon">🌙</span>
+          <span class="spread-name">На ситуацию</span>
+          <span class="spread-desc">7 карт</span>
+        </button>
+      </div>
+      
+      <button class="back-btn" id="back-to-main-1">← Назад</button>
+    </section>
+
+    <!-- Экран ежедневного расклада -->
+    <section id="screen-daily" class="screen">
+      <h2 class="screen-title">Ежедневный расклад</h2>
+      
+      <div class="cards-container" id="daily-cards"></div>
+      
+      <div class="result-actions" id="daily-actions" style="display: none;">
+        <button class="share-btn" id="daily-share-btn">📤 Поделиться с тарологом</button>
+        <button class="new-spread-btn" id="daily-new-btn">🔄 Новый расклад</button>
+      </div>
+      
+      <button class="back-btn" id="back-to-spreads-1">← Назад</button>
+    </section>
+
+    <!-- Экран расклада на ситуацию: концентрация -->
+    <section id="screen-concentration" class="screen">
+      <div class="concentration-header">
+        <button class="description-btn" id="description-btn">📖 Описание расклада</button>
+      </div>
+      
+      <div class="concentration-container">
+        <div class="hourglass" id="hourglass">
+          <div class="hourglass-top">
+            <div class="sand-top"></div>
+          </div>
+          <div class="hourglass-middle"></div>
+          <div class="hourglass-bottom">
+            <div class="sand-bottom"></div>
+          </div>
+        </div>
+        
+        <p class="concentration-text">Сосредоточьтесь на вашем вопросе</p>
+        <p class="timer-text" id="timer-text">7</p>
+      </div>
+      
+      <button class="back-btn" id="back-to-spreads-2">← Назад</button>
+    </section>
+
+    <!-- Экран расклада на ситуацию: активация -->
+    <section id="screen-activation" class="screen">
+      <div class="concentration-header">
+        <button class="description-btn" id="description-btn-2">📖 Описание расклада</button>
+      </div>
+      
+      <div class="activation-container">
+        <p class="activation-text">Сосредоточьтесь на вопросе и сделайте расклад</p>
+        
+        <div class="activation-buttons">
+          <button class="activate-btn" id="activate-btn">✨ Сделать расклад</button>
+          <p class="shake-hint">или встряхните телефон</p>
+        </div>
+      </div>
+      
+      <button class="back-btn" id="back-to-spreads-3">← Назад</button>
+    </section>
+
+    <!-- Модальное окно описания расклада -->
+    <div class="modal" id="description-modal">
+      <div class="modal-content modal-description">
+        <h3 class="modal-title">Расклад «Путь»</h3>
+        <div class="modal-body" id="description-body">
+          <!-- Описание загружается из description.js -->
+        </div>
+        <button class="modal-close" id="description-close">Закрыть</button>
+      </div>
+    </div>
+
+    <!-- Экран расклада на ситуацию: карты -->
+    <section id="screen-situation" class="screen">
+      <div class="situation-layout">
+        <!-- Ряд 1: ментальный уровень (карты 2 и 7) -->
+        <div class="situation-cards-row">
+          <div class="situation-card-slot" data-index="1">
+            <!-- Карта: Прошлое — ментальный -->
+          </div>
+          <div class="situation-card-slot" data-index="6">
+            <!-- Карта: Будущее — ментальный -->
+          </div>
+        </div>
+        
+        <!-- Ряд 2: астральный уровень (карты 3, 1, 6) -->
+        <div class="situation-cards-row">
+          <div class="situation-card-slot" data-index="2">
+            <!-- Карта: Прошлое — астральный -->
+          </div>
+          <div class="situation-card-slot situation-card-center" data-index="0">
+            <!-- Карта: Суть вопроса -->
+          </div>
+          <div class="situation-card-slot" data-index="5">
+            <!-- Карта: Будущее — астральный -->
+          </div>
+        </div>
+        
+        <!-- Ряд 3: физический уровень (карты 4 и 5) -->
+        <div class="situation-cards-row">
+          <div class="situation-card-slot" data-index="3">
+            <!-- Карта: Прошлое — физический -->
+          </div>
+          <div class="situation-card-slot" data-index="4">
+            <!-- Карта: Будущее — физический -->
+          </div>
+        </div>
+      </div>
+      
+      <div class="result-actions" id="situation-actions" style="display: none;">
+        <button class="share-btn" id="situation-share-btn">📤 Поделиться с тарологом</button>
+        <button class="new-spread-btn" id="situation-new-btn">🔄 Новый расклад</button>
+      </div>
+    </section>
+
+    <!-- Модальное окно настроек -->
+    <div class="modal" id="settings-modal">
+      <div class="modal-content">
+        <h3 class="modal-title">Настройки</h3>
+        
+        <div class="setting-item">
+          <span class="setting-label">Звук тасовки</span>
+          <label class="toggle">
+            <input type="checkbox" id="sound-toggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        
+        <button class="modal-close" id="settings-close">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
