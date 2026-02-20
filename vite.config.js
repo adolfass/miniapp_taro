@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   root: 'public',
-  base: '/miniapp_taro/',
+  base: '/',
   build: {
     outDir: '../dist',
     emptyOutDir: true,
