@@ -91,7 +91,7 @@ server {
     listen 80;
     server_name ${DOMAIN} ${WWW_DOMAIN};
 
-    root ${APP_DIR};
+    root ${APP_DIR}/dist;
     index index.html;
 
     # Для Mini App (SPA)
