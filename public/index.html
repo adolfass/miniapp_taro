@@ -6,7 +6,7 @@
   <title>Tarot Mini App</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -29,13 +29,15 @@
         </svg>
       </div>
       
-      <h1 class="title">Таро</h1>
+      <h1 class="title golden-title">Golden Tarot</h1>
+      
+      <p class="hint shuffle-hint" id="shuffle-hint">Положите ладонь сверху и потрясите телефон</p>
       
       <div class="deck-container" id="deck-container">
         <div class="card-back" id="deck-card"></div>
       </div>
       
-      <p class="hint" id="main-hint">Нажмите на колоду для тасовки</p>
+      <div class="shuffle-timer" id="shuffle-timer" style="display: none;">6</div>
     </section>
 
     <!-- Экран выбора расклада -->

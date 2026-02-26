@@ -78,6 +78,21 @@ const descriptionClose = document.getElementById('description-close');
 function switchScreen(screenName) {
   Object.values(screens).forEach(screen => screen.classList.remove('active'));
   screens[screenName].classList.add('active');
+  
+  // Сброс таймера и состояния тасовки при возврате на главный
+  if (screenName === 'main') {
+    if (shuffleTimer) {
+      clearInterval(shuffleTimer);
+      shuffleTimer = null;
+    }
+    isShuffling = false;
+    
+    // Возвращаем подсказку
+    const shuffleHint = document.getElementById('shuffle-hint');
+    const shuffleTimerEl = document.getElementById('shuffle-timer');
+    if (shuffleHint) shuffleHint.style.display = 'block';
+    if (shuffleTimerEl) shuffleTimerEl.style.display = 'none';
+  }
 }
 
 // ========================================
@@ -175,26 +190,58 @@ function closeDescription() {
 // ========================================
 // Обработчики колоды
 // ========================================
+let shuffleTimer = null;
+let isShuffling = false;
+
 function handleDeckClick() {
-  if (deckContainer.classList.contains('shuffling')) return;
+  if (isShuffling) return;
   
+  isShuffling = true;
+  const deckContainer = document.getElementById('deck-container');
+  const shuffleHint = document.getElementById('shuffle-hint');
+  const shuffleTimerEl = document.getElementById('shuffle-timer');
+
   // Воспроизведение звука
   if (state.soundEnabled) {
     playShuffleSound();
   }
-  
-  // Анимация тасовки
-  deckContainer.classList.add('shuffling');
-  
-  // Тактильный отклик
+
+  // Скрываем подсказку, показываем таймер
+  if (shuffleHint) shuffleHint.style.display = 'none';
+  if (shuffleTimerEl) {
+    shuffleTimerEl.style.display = 'block';
+  }
+
+  // Тактильный отклик при начале тасовки
   if (tg.HapticFeedback) {
     tg.HapticFeedback.impactOccurred('medium');
   }
-  
-  setTimeout(() => {
-    deckContainer.classList.remove('shuffling');
-    switchScreen('spreads');
-  }, 500);
+
+  // Запускаем таймер на 6 секунд
+  let timeLeft = 6;
+  if (shuffleTimerEl) shuffleTimerEl.textContent = timeLeft;
+
+  shuffleTimer = setInterval(() => {
+    timeLeft--;
+    if (shuffleTimerEl) shuffleTimerEl.textContent = timeLeft;
+
+    if (timeLeft <= 0) {
+      clearInterval(shuffleTimer);
+      
+      // Скрываем таймер
+      if (shuffleTimerEl) shuffleTimerEl.style.display = 'none';
+      
+      // Тактильный отклик - готово!
+      if (tg.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred('success');
+      }
+      
+      // Переходим к выбору расклада
+      deckContainer.classList.remove('shuffling');
+      isShuffling = false;
+      switchScreen('spreads');
+    }
+  }, 1000);
 }
 
 // ========================================

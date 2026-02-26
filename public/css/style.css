@@ -82,8 +82,49 @@ html, body {
   font-weight: 700;
   color: var(--gold);
   text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
-  margin-bottom: 30px;
+  margin-bottom: 10px;
   letter-spacing: 4px;
+}
+
+/* Golden Tarot - магический древний шрифт */
+.golden-title {
+  font-family: 'Cinzel', 'Cormorant Garamond', serif;
+  font-size: 56px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 30px rgba(212, 175, 55, 0.7), 0 0 60px rgba(212, 175, 55, 0.4);
+  letter-spacing: 6px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.shuffle-hint {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: 20px;
+  text-align: center;
+  font-style: italic;
+}
+
+.shuffle-timer {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 72px;
+  font-weight: 700;
+  color: var(--gold);
+  text-shadow: 0 0 30px rgba(212, 175, 55, 0.8);
+  z-index: 100;
+  animation: timerPulse 1s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+  0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.7; transform: translate(-50%, -50%) scale(1.1); }
 }
 
 .screen-title {
@@ -134,8 +175,8 @@ html, body {
 }
 
 .deck-container {
-  width: var(--card-width);
-  height: var(--card-height);
+  width: calc(var(--card-width) * 2.5);
+  height: calc(var(--card-height) * 2.5);
   position: relative;
   cursor: pointer;
   transition: transform 0.3s ease;
@@ -143,12 +184,13 @@ html, body {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  border-radius: var(--card-radius);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  border-radius: calc(var(--card-radius) * 2.5);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(212, 175, 55, 0.3);
 }
 
 .deck-container:hover {
-  transform: scale(1.05);
+  transform: scale(1.03);
+  box-shadow: 0 12px 50px rgba(0, 0, 0, 0.7), 0 0 40px rgba(212, 175, 55, 0.5);
 }
 
 .deck-container.shuffling {
@@ -157,9 +199,9 @@ html, body {
 
 @keyframes shuffle-shake {
   0%, 100% { transform: translateX(0) rotate(0); }
-  25% { transform: translateX(-10px) rotate(-5deg); }
-  50% { transform: translateX(10px) rotate(5deg); }
-  75% { transform: translateX(-10px) rotate(-5deg); }
+  25% { transform: translateX(-15px) rotate(-3deg); }
+  50% { transform: translateX(15px) rotate(3deg); }
+  75% { transform: translateX(-15px) rotate(-3deg); }
 }
 
 /* ========================================
