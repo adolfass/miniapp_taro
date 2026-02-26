@@ -91,7 +91,7 @@ server {
     listen 80;
     server_name ${DOMAIN} ${WWW_DOMAIN};
 
-    root ${APP_DIR}/dist;
+    root ${APP_DIR};
     index index.html;
 
     # Для Mini App (SPA)
@@ -268,6 +268,11 @@ npm install
 # Сборка
 echo -e "${YELLOW}🔨 Сборка проекта...${NC}"
 npm run build
+
+# Копирование файлов из dist в корень
+echo -e "${YELLOW}📦 Копирование файлов...${NC}"
+cp dist/* .
+cp -r dist/assets .
 
 # Проверка Nginx
 echo -e "${YELLOW}✅ Проверка конфигурации Nginx...${NC}"
