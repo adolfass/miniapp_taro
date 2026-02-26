@@ -4,7 +4,7 @@
  */
 
 import { initStars, createParticles } from './animations.js';
-import { playShuffleSound } from './sound.js';
+import { playShuffleSound, warmupAudio } from './sound.js';
 import { initShake, stopShake } from './shake.js';
 import { getRandomCards } from './cards.js';
 import { getDailyPosition, formatDailySpreadText } from './spreads.js';
@@ -103,19 +103,27 @@ function init() {
   tg.ready();
   tg.expand();
   
+  console.log('Telegram WebApp инициализирован');
+  console.log('tg:', tg);
+  console.log('tg.HapticFeedback:', tg.HapticFeedback);
+
   // Инициализация звёздного фона
   initStars();
-  
+
   // Загрузка настроек
   const savedSound = localStorage.getItem('tarot-sound');
   if (savedSound !== null) {
     state.soundEnabled = savedSound === 'true';
     soundToggle.checked = state.soundEnabled;
   }
-  
+
+  // "Разогрев" аудио при первом взаимодействии (для мобильных)
+  document.addEventListener('click', warmupAudio, { once: true });
+  document.addEventListener('touchstart', warmupAudio, { once: true });
+
   // Обработчики событий
   setupEventListeners();
-  
+
   console.log('Tarot Mini App initialized');
 }
 
@@ -201,9 +209,14 @@ function handleDeckClick() {
   const shuffleHint = document.getElementById('shuffle-hint');
   const shuffleTimerEl = document.getElementById('shuffle-timer');
 
+  console.log('Тасовка началась, звук включён:', state.soundEnabled);
+  console.log('Telegram WebApp:', tg);
+  console.log('HapticFeedback:', tg.HapticFeedback);
+
   // Воспроизведение звука
   if (state.soundEnabled) {
     playShuffleSound();
+    console.log('Звук тасовки воспроизводится');
   }
 
   // Скрываем подсказку, показываем таймер
@@ -212,9 +225,10 @@ function handleDeckClick() {
     shuffleTimerEl.style.display = 'block';
   }
 
-  // Тактильный отклик при начале тасовки
+  // Тактильный отклик при начале тасовки (лёгкая вибрация)
   if (tg.HapticFeedback) {
-    tg.HapticFeedback.impactOccurred('medium');
+    tg.HapticFeedback.impactOccurred('light');
+    console.log('Вибрация отправлена (light impact - начало)');
   }
 
   // Запускаем таймер на 6 секунд
@@ -231,9 +245,13 @@ function handleDeckClick() {
       // Скрываем таймер
       if (shuffleTimerEl) shuffleTimerEl.style.display = 'none';
       
-      // Тактильный отклик - готово!
+      // Тактильный отклик - готово! (средняя длительность)
       if (tg.HapticFeedback) {
-        tg.HapticFeedback.notificationOccurred('success');
+        // Используем impactOccurred с 'medium' для средней вибрации
+        tg.HapticFeedback.impactOccurred('medium');
+        console.log('Вибрация отправлена (medium impact)');
+      } else {
+        console.log('HapticFeedback недоступен');
       }
       
       // Переходим к выбору расклада
