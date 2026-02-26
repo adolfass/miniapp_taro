@@ -516,35 +516,56 @@ html, body {
   opacity: 1;
 }
 
-/* Расширенная карта (при клике) */
+/* Расширенная карта (при клике) - ФИНАЛЬНЫЙ ВАРИАНТ (рассчитано под 96 символов) */
 .card.expanded {
   position: fixed;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%) scale(2);
+  transform: translate(-50%, -50%) scale(4.2);
   z-index: 1000;
   cursor: pointer;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(212, 175, 55, 0.5);
-  max-height: 75vh;
-  max-width: 320px;
+  max-height: 95vh;
+  max-width: 600px;
 }
 
 .card.expanded .card-meaning {
   opacity: 1;
-  font-size: 9px;
-  padding: 12px 14px;
-  max-height: 60vh;
+  font-size: 6px;
+  padding: 4px 6px;
+  max-height: 88vh;
   overflow-y: auto;
 }
 
 .card.expanded .card-meaning strong {
-  font-size: 12px;
+  font-size: 13px;
   margin-bottom: 6px;
+  display: block;
 }
 
 .card.expanded .card-meaning span {
-  font-size: 8px;
-  line-height: 1.4;
+  font-size: 3.5px;
+  line-height: 1.15;
+  display: block;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Текст внутри обычной карты (когда перевёрнута) */
+.card .card-meaning {
+  font-size: 6.5px;
+  padding: 4px 5px;
+}
+
+.card .card-meaning strong {
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+
+.card .card-meaning span {
+  font-size: 3.5px;
+  line-height: 1.1;
 }
 
 /* Затемнение фона при расширенной карте */
