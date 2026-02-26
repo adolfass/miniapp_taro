@@ -419,6 +419,7 @@ function createCardElement(card, index, type, positionName = '') {
     <div class="card-inner">
       <div class="card-face card-front"></div>
       <div class="card-face card-back-face">
+        <img src="assets/card-faces/major/${card.id.toString().padStart(2, '0')}-${card.name.toLowerCase().replace(/\s+/g, '-')}.webp" alt="${card.name_ru}" onerror="this.style.display='none'">
       </div>
     </div>
     <div class="card-glow"></div>
@@ -436,6 +437,22 @@ function createCardElement(card, index, type, positionName = '') {
       revealSituationCard(index);
     }
   });
+  
+  // Двойной клик или клик по раскрытой карте — расширение
+  cardEl.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    toggleCardExpand(cardEl);
+  });
+  
+  // Клик по раскрытой карте — расширение (для мобильных)
+  cardEl.addEventListener('click', (e) => {
+    if (cardEl.classList.contains('revealed')) {
+      // Небольшая задержка чтобы не срабатывало при перевороте
+      setTimeout(() => {
+        toggleCardExpand(cardEl);
+      }, 100);
+    }
+  });
 
   return cardEl;
 }
@@ -444,3 +461,62 @@ function createCardElement(card, index, type, positionName = '') {
 // Запуск приложения
 // ========================================
 init();
+
+// ========================================
+// Расширение карт при клике
+// ========================================
+let expandedCard = null;
+const cardOverlay = document.getElementById('card-overlay');
+
+// Обработчик для overlay (закрытие по клику вне карты)
+if (cardOverlay) {
+  cardOverlay.addEventListener('click', closeExpandedCard);
+}
+
+function toggleCardExpand(cardEl) {
+  if (!cardEl.classList.contains('revealed')) return;
+  
+  if (cardEl.classList.contains('expanded')) {
+    closeExpandedCard();
+  } else {
+    openExpandedCard(cardEl);
+  }
+}
+
+function openExpandedCard(cardEl) {
+  // Закрываем предыдущую расширенную карту если есть
+  if (expandedCard) {
+    expandedCard.classList.remove('expanded');
+  }
+  
+  expandedCard = cardEl;
+  cardEl.classList.add('expanded');
+  
+  if (cardOverlay) {
+    cardOverlay.classList.add('active');
+  }
+  
+  // Блокируем прокрутку страницы
+  document.body.style.overflow = 'hidden';
+}
+
+function closeExpandedCard() {
+  if (expandedCard) {
+    expandedCard.classList.remove('expanded');
+    expandedCard = null;
+  }
+  
+  if (cardOverlay) {
+    cardOverlay.classList.remove('active');
+  }
+  
+  // Возвращаем прокрутку
+  document.body.style.overflow = '';
+}
+
+// Закрытие по Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && expandedCard) {
+    closeExpandedCard();
+  }
+});

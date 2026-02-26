@@ -474,6 +474,51 @@ html, body {
   opacity: 1;
 }
 
+/* Расширенная карта (при клике) */
+.card.expanded {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1.5);
+  z-index: 1000;
+  cursor: pointer;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(212, 175, 55, 0.5);
+}
+
+.card.expanded .card-meaning {
+  opacity: 1;
+  font-size: 13px;
+}
+
+.card.expanded .card-meaning strong {
+  font-size: 16px;
+}
+
+.card.expanded .card-meaning span {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Затемнение фона при расширенной карте */
+.card-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  backdrop-filter: blur(4px);
+}
+
+.card-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .card-meaning strong {
   color: var(--gold);
   font-size: 11px;
