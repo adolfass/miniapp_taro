@@ -33,12 +33,20 @@ if (import.meta.env.DEV) {
           navigator.clipboard.writeText(text).then(() => callback(true));
         }
       },
-      sendData: (data) => console.log('sendData:', data)
+      sendData: (data) => console.log('sendData:', data),
+      openInvoice: (url, callback) => {
+        console.log('Opening invoice:', url);
+        // Имитируем успешную оплату через 2 секунды
+        setTimeout(() => callback('paid'), 2000);
+      }
     }
   };
 }
 
 const tg = window.Telegram.WebApp;
+
+// Экспортируем tg для других модулей
+export { tg };
 
 // ========================================
 // Состояние приложения
@@ -48,8 +56,42 @@ const state = {
   dailyCards: [],
   situationCards: [],
   dailyRevealed: [false, false, false],
-  situationRevealed: Array(7).fill(false)
+  situationRevealed: Array(7).fill(false),
+  currentSpread: null,
+  cards: []
 };
+
+// Экспортируем состояние для других модулей
+export const getCurrentResult = () => {
+  if (state.currentSpread === 'daily') {
+    return {
+      type: 'Ежедневный расклад',
+      cards: state.dailyCards,
+      positions: ['Прошлое', 'Настоящее', 'Будущее']
+    };
+  } else if (state.currentSpread === 'situation') {
+    return {
+      type: 'Расклад на ситуацию «Путь»',
+      cards: state.situationCards,
+      positions: [
+        'Суть вопроса',
+        'Прошлое ментальный',
+        'Прошлое астральный',
+        'Прошлое физический',
+        'Будущее физический',
+        'Будущее астральный',
+        'Будущее ментальный'
+      ]
+    };
+  }
+  return null;
+};
+
+// Экспортируем currentSpread для других модулей
+export const currentSpread = state.currentSpread;
+
+// Сохраняем состояние в window для доступа из chat.js
+window.tarotState = state;
 
 // ========================================
 // DOM Элементы
@@ -60,7 +102,10 @@ const screens = {
   daily: document.getElementById('screen-daily'),
   concentration: document.getElementById('screen-concentration'),
   activation: document.getElementById('screen-activation'),
-  situation: document.getElementById('screen-situation')
+  situation: document.getElementById('screen-situation'),
+  tarologists: document.getElementById('screen-tarologists'),
+  chat: document.getElementById('screen-chat'),
+  rating: document.getElementById('screen-rating')
 };
 
 const deckContainer = document.getElementById('deck-container');
@@ -76,9 +121,14 @@ const descriptionClose = document.getElementById('description-close');
 // Навигация
 // ========================================
 function switchScreen(screenName) {
-  Object.values(screens).forEach(screen => screen.classList.remove('active'));
-  screens[screenName].classList.add('active');
+  Object.values(screens).forEach(screen => {
+    if (screen) screen.classList.remove('active');
+  });
   
+  if (screens[screenName]) {
+    screens[screenName].classList.add('active');
+  }
+
   // Сброс таймера и состояния тасовки при возврате на главный
   if (screenName === 'main') {
     if (shuffleTimer) {
@@ -86,14 +136,23 @@ function switchScreen(screenName) {
       shuffleTimer = null;
     }
     isShuffling = false;
-    
+
     // Возвращаем подсказку
     const shuffleHint = document.getElementById('shuffle-hint');
     const shuffleTimerEl = document.getElementById('shuffle-timer');
     if (shuffleHint) shuffleHint.style.display = 'block';
     if (shuffleTimerEl) shuffleTimerEl.style.display = 'none';
   }
+  
+  // Останавливаем таймер чата при уходе с экрана чата
+  if (screenName !== 'chat' && timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
 }
+
+// Экспортируем switchScreen для других модулей
+export { switchScreen };
 
 // ========================================
 // Инициализация
@@ -266,18 +325,19 @@ function handleDeckClick() {
 // Ежедневный расклад
 // ========================================
 function startDailySpread() {
+  state.currentSpread = 'daily';
   state.dailyCards = getRandomCards(3);
   state.dailyRevealed = [false, false, false];
-  
+
   const container = document.getElementById('daily-cards');
   container.innerHTML = '';
-  
+
   state.dailyCards.forEach((card, index) => {
     const position = getDailyPosition(index);
     const cardEl = createCardElement(card, index, 'daily', position.name);
     container.appendChild(cardEl);
   });
-  
+
   document.getElementById('daily-actions').style.display = 'none';
   switchScreen('daily');
 }
@@ -331,8 +391,10 @@ function formatDailyResult() {
 // Расклад на ситуацию
 // ========================================
 let concentrationTimer = null;
+export let timerInterval = null;
 
 function startSituationSpread() {
+  state.currentSpread = 'situation';
   switchScreen('concentration');
   startConcentrationTimer();
 }

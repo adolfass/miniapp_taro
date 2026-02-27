@@ -175,7 +175,7 @@
     <div class="modal" id="settings-modal">
       <div class="modal-content">
         <h3 class="modal-title">Настройки</h3>
-        
+
         <div class="setting-item">
           <span class="setting-label">Звук тасовки</span>
           <label class="toggle">
@@ -183,12 +183,159 @@
             <span class="slider"></span>
           </label>
         </div>
-        
+
         <button class="modal-close" id="settings-close">Закрыть</button>
+      </div>
+    </div>
+
+    <!-- ========================================
+         ЭКРАН ВЫБОРА ТАРОЛОГА
+         ======================================== -->
+    <section id="screen-tarologists" class="screen">
+      <h2 class="screen-title">Выберите таролога</h2>
+
+      <div class="tarologists-list" id="tarologists-list">
+        <!-- Карточки тарологов загружаются динамически -->
+      </div>
+
+      <div class="tarologist-loading" id="tarologists-loading">
+        <div class="loading-spinner"></div>
+        <p>Загрузка тарологов...</p>
+      </div>
+
+      <button class="back-btn" id="back-to-spreads-tarologists">← Назад</button>
+    </section>
+
+    <!-- ========================================
+         МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ ОПЛАТЫ
+         ======================================== -->
+    <div class="modal" id="payment-modal">
+      <div class="modal-content modal-payment">
+        <h3 class="modal-title">Подтверждение оплаты</h3>
+        
+        <div class="payment-info">
+          <div class="payment-row">
+            <span class="payment-label">Таролог:</span>
+            <span class="payment-value" id="payment-tarologist-name">—</span>
+          </div>
+          <div class="payment-row">
+            <span class="payment-label">Длительность:</span>
+            <span class="payment-value">25 минут</span>
+          </div>
+          <div class="payment-row payment-total">
+            <span class="payment-label">Стоимость:</span>
+            <span class="payment-value stars-amount" id="payment-stars-amount">0 ⭐</span>
+          </div>
+        </div>
+
+        <p class="payment-disclaimer">
+          Вы соглашаетесь оплатить расшифровку расклада живым специалистом.
+          Оплата производится через Telegram Stars.
+        </p>
+
+        <div class="payment-buttons">
+          <button class="payment-cancel-btn" id="payment-cancel-btn">Отмена</button>
+          <button class="payment-confirm-btn" id="payment-confirm-btn">
+            <span class="btn-stars">⭐</span> Оплатить
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================
+         ЭКРАН ЧАТА С ТАРОЛОГОМ
+         ======================================== -->
+    <section id="screen-chat" class="screen">
+      <div class="chat-header">
+        <div class="chat-tarologist-info">
+          <img src="" alt="" class="chat-tarologist-avatar" id="chat-tarologist-avatar">
+          <div class="chat-tarologist-name">
+            <span id="chat-tarologist-name">—</span>
+            <span class="chat-status" id="chat-status">онлайн</span>
+          </div>
+        </div>
+        <div class="chat-timer" id="chat-timer">
+          <span class="timer-icon">⏳</span>
+          <span class="timer-value" id="timer-value">25:00</span>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chat-messages">
+        <!-- Сообщения загружаются динамически -->
+      </div>
+
+      <div class="chat-input-container" id="chat-input-container">
+        <input 
+          type="text" 
+          class="chat-input" 
+          id="chat-input" 
+          placeholder="Введите сообщение..."
+          maxlength="500"
+        >
+        <button class="chat-send-btn" id="chat-send-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="chat-timeout-message" id="chat-timeout-message" style="display: none;">
+        <p>⏰ Время консультации вышло</p>
+        <p class="timeout-subtext">Переход к оценке...</p>
+      </div>
+    </section>
+
+    <!-- ========================================
+         ЭКРАН ОЦЕНКИ ТАРОЛОГА
+         ======================================== -->
+    <section id="screen-rating" class="screen">
+      <div class="rating-container">
+        <div class="rating-icon">✨</div>
+        <h2 class="rating-title">Оцените консультацию</h2>
+        <p class="rating-subtitle">Ваш отзыв поможет улучшить сервис</p>
+
+        <div class="stars-rating" id="stars-rating">
+          <button class="star-btn" data-rating="1">☆</button>
+          <button class="star-btn" data-rating="2">☆</button>
+          <button class="star-btn" data-rating="3">☆</button>
+          <button class="star-btn" data-rating="4">☆</button>
+          <button class="star-btn" data-rating="5">☆</button>
+        </div>
+
+        <p class="selected-rating-text" id="selected-rating-text"></p>
+
+        <button class="submit-rating-btn" id="submit-rating-btn" disabled>
+          Отправить оценку
+        </button>
+
+        <button class="back-to-main-rating-btn" id="back-to-main-rating-btn" style="display: none;">
+          Вернуться к раскладам
+        </button>
+      </div>
+    </section>
+
+    <!-- ========================================
+         МОДАЛЬНОЕ ОКНО УСПЕШНОЙ ОПЛАТЫ
+         ======================================== -->
+    <div class="modal" id="payment-success-modal">
+      <div class="modal-content modal-success">
+        <div class="success-icon">✅</div>
+        <h3 class="modal-title">Оплата успешна!</h3>
+        <p class="success-text">
+          Таролог уведомлён и готов к консультации.
+        </p>
+        <button class="modal-close start-chat-btn" id="start-chat-btn">
+          Начать чат
+        </button>
       </div>
     </div>
   </div>
 
   <script type="module" src="js/main.js"></script>
+  <script type="module">
+    // Импортируем и инициализируем модуль тарологов
+    import { initTarologists } from './js/tarologists.js';
+    initTarologists();
+  </script>
 </body>
 </html>
