@@ -93,7 +93,7 @@ function validateTelegramData(initData) {
  */
 async function sendTelegramMessage(telegramId, text) {
   if (!BOT_TOKEN || !telegramId) return;
-  
+
   try {
     await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       chat_id: telegramId,
@@ -101,6 +101,25 @@ async function sendTelegramMessage(telegramId, text) {
     });
   } catch (error) {
     console.error('Ошибка отправки сообщения в Telegram:', error.message);
+  }
+}
+
+/**
+ * Запрос к Telegram API
+ * @param {string} method - метод API
+ * @param {Object} data - данные запроса
+ * @returns {Promise<Object>}
+ */
+async function callTelegram(method, data = {}) {
+  try {
+    const response = await axios.post(
+      `https://api.telegram.org/bot${BOT_TOKEN}/${method}`,
+      data
+    );
+    return response.data;
+  } catch (error) {
+    console.error(`Telegram API error (${method}):`, error.response?.data || error.message);
+    return null;
   }
 }
 
@@ -572,6 +591,153 @@ app.post('/api/admin/payouts', isAdmin, (req, res) => {
     res.json({ success: true, data: payout });
   } catch (error) {
     console.error('Ошибка создания выплаты:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ========================================
+// Admin API — Управление тарологами
+// ========================================
+
+/**
+ * GET /api/admin/tarologist/:id
+ * Получить таролога по ID
+ */
+app.get('/api/admin/tarologist/:id', isAdmin, (req, res) => {
+  try {
+    const tarologist = Tarologist.getById(req.params.id);
+    
+    if (!tarologist) {
+      return res.status(404).json({ success: false, error: 'Таролог не найден' });
+    }
+    
+    res.json({ success: true, data: tarologist });
+  } catch (error) {
+    console.error('Ошибка получения таролога:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/admin/tarologist
+ * Создать нового таролога
+ */
+app.post('/api/admin/tarologist', isAdmin, async (req, res) => {
+  try {
+    const { telegram_id, name, description, photo_url } = req.body;
+    
+    if (!telegram_id) {
+      return res.status(400).json({ success: false, error: 'Telegram ID обязателен' });
+    }
+    
+    // Проверяем, не существует ли уже
+    const existing = db.prepare('SELECT id FROM tarologists WHERE telegram_id = ?').get(telegram_id);
+    if (existing) {
+      return res.status(400).json({ success: false, error: 'Таролог с таким Telegram ID уже существует' });
+    }
+    
+    // Если имя не указано — пробуем получить из Telegram
+    let finalName = name;
+    let finalPhoto = photo_url;
+    
+    if (!finalName || !finalPhoto) {
+      try {
+        const tgUser = await callTelegram('getChat', { chat_id: telegram_id });
+        if (tgUser && tgUser.ok) {
+          const user = tgUser.result;
+          if (!finalName) {
+            finalName = user.first_name || user.username || 'Аноним';
+          }
+          if (!finalPhoto && user.photo) {
+            // Получаем фото профиля
+            const photos = await callTelegram('getUserProfilePhotos', { 
+              user_id: telegram_id, 
+              limit: 1 
+            });
+            if (photos.ok && photos.result.total_count > 0) {
+              const fileId = photos.result.photos[0][0].file_id;
+              const file = await callTelegram('getFile', { file_id: fileId });
+              if (file.ok) {
+                finalPhoto = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.result.file_path}`;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Не удалось получить данные из Telegram:', e.message);
+      }
+    }
+    
+    // Создаём таролога
+    const result = Tarologist.create({
+      name: finalName || 'Аноним',
+      photo_url: finalPhoto || null,
+      description: description || '',
+      telegram_id
+    });
+    
+    const tarologist = Tarologist.getById(result.lastInsertRowid);
+    
+    res.json({ success: true, data: tarologist });
+  } catch (error) {
+    console.error('Ошибка создания таролога:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * PUT /api/admin/tarologist/:id
+ * Обновить таролога
+ */
+app.put('/api/admin/tarologist/:id', isAdmin, (req, res) => {
+  try {
+    const { name, description, photo_url } = req.body;
+    const tarologistId = req.params.id;
+    
+    const tarologist = Tarologist.getById(tarologistId);
+    if (!tarologist) {
+      return res.status(404).json({ success: false, error: 'Таролог не найден' });
+    }
+    
+    // Обновляем
+    const stmt = db.prepare(`
+      UPDATE tarologists
+      SET name = COALESCE(?, name),
+          description = COALESCE(?, description),
+          photo_url = COALESCE(?, photo_url)
+      WHERE id = ?
+    `);
+    
+    stmt.run(name, description, photo_url, tarologistId);
+    
+    const updated = Tarologist.getById(tarologistId);
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Ошибка обновления таролога:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/admin/tarologist/:id
+ * Удалить таролога
+ */
+app.delete('/api/admin/tarologist/:id', isAdmin, (req, res) => {
+  try {
+    const tarologistId = req.params.id;
+    
+    const tarologist = Tarologist.getById(tarologistId);
+    if (!tarologist) {
+      return res.status(404).json({ success: false, error: 'Таролог не найден' });
+    }
+    
+    // Удаляем
+    const stmt = db.prepare('DELETE FROM tarologists WHERE id = ?');
+    stmt.run(tarologistId);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Ошибка удаления таролога:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

@@ -46,6 +46,14 @@ const backButtons = {
 // Модальные окна
 const tarologistModal = document.getElementById('tarologist-modal');
 const payoutConfirmModal = document.getElementById('payout-confirm-modal');
+const tarologistEditModal = document.getElementById('tarologist-edit-modal');
+
+// Элементы формы редактирования
+const editModalTitle = document.getElementById('edit-modal-title');
+const editTelegramId = document.getElementById('edit-telegram-id');
+const editName = document.getElementById('edit-name');
+const editDescription = document.getElementById('edit-description');
+const editPhotoUrl = document.getElementById('edit-photo-url');
 
 // ========================================
 // Инициализация
@@ -189,7 +197,7 @@ function updateDashboardUI() {
 
 function renderTarologistsList() {
   const container = document.getElementById('tarologists-admin-list');
-  
+
   if (currentTarologists.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
@@ -199,7 +207,7 @@ function renderTarologistsList() {
     `;
     return;
   }
-  
+
   container.innerHTML = currentTarologists.map(tarologist => `
     <div class="tarologist-admin-card" data-id="${tarologist.id}">
       <div class="tarologist-admin-info">
@@ -207,6 +215,10 @@ function renderTarologistsList() {
         <div class="tarologist-admin-meta">
           <span>⭐ ${tarologist.rating?.toFixed(1) || '0.0'}</span>
           <span>💬 ${tarologist.sessions_count || 0}</span>
+        </div>
+        <div class="tarologist-admin-actions">
+          <button class="tarologist-action-btn edit-btn" data-id="${tarologist.id}">✏️ Редактировать</button>
+          <button class="tarologist-action-btn delete-btn" data-id="${tarologist.id}">🗑️ Удалить</button>
         </div>
       </div>
       <div class="tarologist-admin-balance">${formatNumber(tarologist.balance || 0)} ⭐</div>
@@ -314,18 +326,93 @@ async function markPayout(tarologistId, amount) {
         amount: amount
       })
     });
-    
+
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Ошибка создания выплаты');
     }
-    
+
     const result = await response.json();
     return result;
   } catch (error) {
     console.error('Error marking payout:', error);
     throw error;
   }
+}
+
+async function saveTarologist(data) {
+  const url = data.id 
+    ? `${API_BASE}/tarologist/${data.id}`
+    : `${API_BASE}/tarologist`;
+  
+  const method = data.id ? 'PUT' : 'POST';
+  
+  const response = await fetch(url, {
+    method,
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      telegram_id: data.telegram_id,
+      name: data.name,
+      description: data.description,
+      photo_url: data.photo_url
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Ошибка сохранения');
+  }
+
+  return await response.json();
+}
+
+async function deleteTarologist(id) {
+  const response = await fetch(`${API_BASE}/tarologist/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders()
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Ошибка удаления');
+  }
+
+  return await response.json();
+}
+
+// ========================================
+// Управление модальным окном редактирования
+// ========================================
+let editingTarologistId = null;
+
+function openEditModal(tarologist = null) {
+  editingTarologistId = tarologist?.id || null;
+  
+  if (tarologist) {
+    editModalTitle.textContent = 'Редактировать таролога';
+    editTelegramId.value = tarologist.telegram_id || '';
+    editTelegramId.disabled = true; // Нельзя менять ID при редактировании
+    editName.value = tarologist.name || '';
+    editDescription.value = tarologist.description || '';
+    editPhotoUrl.value = tarologist.photo_url || '';
+  } else {
+    editModalTitle.textContent = 'Добавить таролога';
+    editTelegramId.value = '';
+    editTelegramId.disabled = false;
+    editName.value = '';
+    editDescription.value = '';
+    editPhotoUrl.value = '';
+  }
+  
+  tarologistEditModal.classList.add('active');
+}
+
+function closeEditModal() {
+  tarologistEditModal.classList.remove('active');
+  editingTarologistId = null;
 }
 
 // ========================================
@@ -366,8 +453,11 @@ function setupEventListeners() {
     loadTransactions(e.target.value);
   });
   
-  // Клик по тарологу
+  // Клик по тарологу (открытие модального окна с информацией)
   document.getElementById('tarologists-admin-list')?.addEventListener('click', (e) => {
+    // Игнорируем клики по кнопкам действий
+    if (e.target.closest('.tarologist-action-btn')) return;
+    
     const card = e.target.closest('.tarologist-admin-card');
     if (card) {
       const tarologist = currentTarologists.find(t => t.id == card.dataset.id);
@@ -376,7 +466,76 @@ function setupEventListeners() {
       }
     }
   });
-  
+
+  // Кнопка "Добавить таролога"
+  document.getElementById('add-tarologist-btn')?.addEventListener('click', () => {
+    openEditModal();
+  });
+
+  // Редактирование таролога
+  document.getElementById('tarologists-admin-list')?.addEventListener('click', (e) => {
+    if (e.target.closest('.edit-btn')) {
+      const btn = e.target.closest('.edit-btn');
+      const tarologist = currentTarologists.find(t => t.id == btn.dataset.id);
+      if (tarologist) {
+        openEditModal(tarologist);
+      }
+    }
+  });
+
+  // Удаление таролога
+  document.getElementById('tarologists-admin-list')?.addEventListener('click', (e) => {
+    if (e.target.closest('.delete-btn')) {
+      const btn = e.target.closest('.delete-btn');
+      const tarologist = currentTarologists.find(t => t.id == btn.dataset.id);
+      if (tarologist) {
+        if (confirm(`Удалить таролога "${tarologist.name}"?`)) {
+          deleteTarologist(tarologist.id)
+            .then(() => {
+              showAlert('Таролог удалён');
+              loadTarologists();
+            })
+            .catch(error => {
+              showAlert('Ошибка: ' + error.message);
+            });
+        }
+      }
+    }
+  });
+
+  // Сохранение таролога
+  document.getElementById('save-tarologist-btn')?.addEventListener('click', async () => {
+    const telegramId = editTelegramId.value.trim();
+    const name = editName.value.trim();
+    const description = editDescription.value.trim();
+    const photoUrl = editPhotoUrl.value.trim();
+
+    if (!telegramId) {
+      showAlert('Введите Telegram ID');
+      return;
+    }
+
+    try {
+      await saveTarologist({
+        id: editingTarologistId,
+        telegram_id: telegramId,
+        name: name || undefined,
+        description: description || undefined,
+        photo_url: photoUrl || undefined
+      });
+
+      showAlert('Таролог сохранён!');
+      closeEditModal();
+      await loadTarologists();
+      await loadDashboard();
+    } catch (error) {
+      showAlert('Ошибка: ' + error.message);
+    }
+  });
+
+  // Отмена редактирования
+  document.getElementById('cancel-edit-btn')?.addEventListener('click', closeEditModal);
+
   // Закрытие модального окна таролога
   document.getElementById('close-modal-btn')?.addEventListener('click', closeTarologistModal);
   
@@ -418,6 +577,9 @@ function setupEventListeners() {
     }
     if (e.target === payoutConfirmModal) {
       closePayoutConfirm();
+    }
+    if (e.target === tarologistEditModal) {
+      closeEditModal();
     }
   });
 }
