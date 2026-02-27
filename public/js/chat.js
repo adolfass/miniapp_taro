@@ -423,6 +423,5 @@ chatInput?.addEventListener('keypress', (e) => {
 });
 
 // ========================================
-// Экспорт
+// Экспорт уже объявлен inline (initChat)
 // ========================================
-export { initChat, connectWebSocket, sendMessage };

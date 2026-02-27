@@ -345,4 +345,4 @@ function getMockTarologists() {
 // ========================================
 // Экспорт
 // ========================================
-export { openTarologistsScreen, openPaymentModal };
+export { openPaymentModal };
