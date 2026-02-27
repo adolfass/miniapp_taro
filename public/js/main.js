@@ -371,12 +371,12 @@ function performSituationSpread() {
   // Позиции для расклада на ситуацию
   const positions = [
     { index: 0, name: 'Суть вопроса' },
-    { index: 1, name: 'Прошлое — ментальный' },
-    { index: 2, name: 'Прошлое — астральный' },
-    { index: 3, name: 'Прошлое — физический' },
-    { index: 4, name: 'Будущее — физический' },
-    { index: 5, name: 'Будущее — астральный' },
-    { index: 6, name: 'Будущее — ментальный' }
+    { index: 1, name: 'Прошлое ментальный' },
+    { index: 2, name: 'Прошлое астральный' },
+    { index: 3, name: 'Прошлое физический' },
+    { index: 4, name: 'Будущее физический' },
+    { index: 5, name: 'Будущее астральный' },
+    { index: 6, name: 'Будущее ментальный' }
   ];
 
   // Заполняем слоты картами
@@ -489,9 +489,9 @@ function createCardElement(card, index, type, positionName = '') {
     </div>
     <div class="card-glow"></div>
     <div class="card-meaning">
-      <strong>${positionName}</strong><br>
-      ${card.name_ru}<br>
-      <span style="opacity:0.8;font-size:10px;">${card.description}</span>
+      <strong class="level-name">${positionName}</strong>
+      <span class="card-name">${card.name_ru}</span>
+      <span class="card-description">${card.description}</span>
     </div>
   `;
 

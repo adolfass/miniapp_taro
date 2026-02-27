@@ -516,56 +516,137 @@ html, body {
   opacity: 1;
 }
 
-/* Расширенная карта (при клике) - ФИНАЛЬНЫЙ ВАРИАНТ (рассчитано под 96 символов) */
+/* Расширенная карта (при клике) - ФИКСИРОВАННЫЙ РАЗМЕР (не менять!) */
 .card.expanded {
   position: fixed;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%) scale(4.2);
+  transform: translate(-50%, -50%) scale(3.5);
   z-index: 1000;
   cursor: pointer;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(212, 175, 55, 0.5);
-  max-height: 95vh;
-  max-width: 600px;
+  max-height: 80vh;
+  max-width: 400px;
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  background: transparent;
+}
+
+.card.expanded .card-inner {
+  background: transparent;
+}
+
+.card.expanded .card-face {
+  border-radius: 12px;
 }
 
 .card.expanded .card-meaning {
   opacity: 1;
-  font-size: 6px;
-  padding: 4px 6px;
-  max-height: 88vh;
+  font-size: 5px;
+  padding: 6px 8px;
+  max-height: 70vh;
   overflow-y: auto;
+  background: linear-gradient(135deg, rgba(26, 11, 46, 0.95), rgba(45, 31, 78, 0.95));
+  border-radius: 10px;
 }
 
-.card.expanded .card-meaning strong {
-  font-size: 13px;
+/* Мистическое название карты - золотое, загадочное (МОДАЛЬНОЕ ОКНО) */
+.card.expanded .card-meaning .level-name {
+  font-size: 7px;
+  margin-bottom: 4px;
+  display: block;
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  color: rgba(245, 245, 245, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
+}
+
+/* Название карты - крупное, магическое, золотое (МОДАЛЬНОЕ ОКНО) */
+.card.expanded .card-meaning .card-name {
+  font-size: 16px;
   margin-bottom: 6px;
   display: block;
+  font-family: 'Cinzel', 'Cormorant Garamond', serif;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 25px rgba(212, 175, 55, 0.9), 0 0 50px rgba(212, 175, 55, 0.5), 0 0 75px rgba(212, 175, 55, 0.3);
+  letter-spacing: 0.5px;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.9));
 }
 
-.card.expanded .card-meaning span {
-  font-size: 3.5px;
-  line-height: 1.15;
+/* Описание карты - крупное, читаемое, Markdown-стиль (МОДАЛЬНОЕ ОКНО) */
+.card.expanded .card-meaning .card-description {
+  font-size: 4.5px;
+  line-height: 1.4;
   display: block;
   word-break: break-word;
   overflow-wrap: break-word;
   hyphens: auto;
+  color: rgba(245, 245, 245, 0.95);
+  font-weight: 500;
+  padding: 3px 4px;
+  background: rgba(212, 175, 55, 0.05);
+  border-radius: 4px;
+  border-left: 2px solid rgba(212, 175, 55, 0.4);
 }
 
-/* Текст внутри обычной карты (когда перевёрнута) */
-.card .card-meaning {
-  font-size: 6.5px;
-  padding: 4px 5px;
+/* Выделение жирным в описании (Markdown **текст**) */
+.card.expanded .card-meaning .card-description strong {
+  font-weight: 700;
+  color: var(--gold-light);
 }
 
-.card .card-meaning strong {
-  font-size: 10px;
-  margin-bottom: 4px;
+/* Текст внутри обычной карты (когда перевёрнута) - НАСТРОЙКИ ДЛЯ iPhone 14 Pro */
+.card .card-meaning .level-name {
+  font-size: 4px;
+  margin-bottom: 2px;
+  color: rgba(245, 245, 245, 0.6);
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.1px;
 }
 
-.card .card-meaning span {
-  font-size: 3.5px;
-  line-height: 1.1;
+/* Название карты - крупное, магическое (ПЕРЕВЁРНУТАЯ КАРТА) */
+.card .card-meaning .card-name {
+  font-size: 11px;
+  margin-bottom: 3px;
+  display: block;
+  font-family: 'Cinzel', 'Cormorant Garamond', serif;
+  font-weight: 700;
+  color: var(--gold);
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.7), 0 0 20px rgba(212, 175, 55, 0.4);
+  letter-spacing: 0.3px;
+}
+
+/* Описание карты - крупное, читаемое, Markdown-стиль (ПЕРЕВЁРНУТАЯ КАРТА) */
+.card .card-meaning .card-description {
+  font-size: 4px;
+  line-height: 1.35;
+  display: block;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  color: rgba(245, 245, 245, 0.9);
+  font-weight: 500;
+  padding: 2px 3px;
+  background: rgba(212, 175, 55, 0.05);
+  border-radius: 3px;
+  border-left: 2px solid rgba(212, 175, 55, 0.3);
+}
+
+/* Выделение жирным в описании (Markdown **текст**) */
+.card .card-meaning .card-description strong {
+  font-weight: 700;
+  color: var(--gold-light);
 }
 
 /* Затемнение фона при расширенной карте */
