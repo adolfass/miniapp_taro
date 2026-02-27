@@ -1,9 +1,9 @@
 /**
  * Chat Module
- * Чат с тарологом с таймером и WebSocket
+ * Чат с тарологом с таймером, WebSocket и поддержкой медиа
  */
 
-import { switchScreen, tg } from './main.js';
+import { switchScreen, tg, getCurrentResult } from './main.js';
 
 // ========================================
 // Состояние
@@ -38,13 +38,16 @@ const selectedRatingText = document.getElementById('selected-rating-text');
 const submitRatingBtn = document.getElementById('submit-rating-btn');
 const backToMainRatingBtn = document.getElementById('back-to-main-rating-btn');
 
+// Кнопка отправки расклада
+const shareSpreadBtn = document.getElementById('share-spread-btn');
+
 // ========================================
 // Инициализация
 // ========================================
 export function initChat(tarologist, transactionId) {
   currentTarologist = tarologist;
   currentSession = { id: transactionId };
-  
+
   setupChatUI();
   connectWebSocket();
   setupRatingListeners();
@@ -52,37 +55,98 @@ export function initChat(tarologist, transactionId) {
 
 function setupChatUI() {
   // Устанавливаем информацию о тарологе
-  chatTarologistAvatar.src = currentTarologist.photo_url;
+  if (currentTarologist.photo_url) {
+    chatTarologistAvatar.src = currentTarologist.photo_url;
+  } else {
+    chatTarologistAvatar.src = 'https://via.placeholder.com/44x44/8B5CF6/FFFFFF?text=' + encodeURIComponent(currentTarologist.name[0]);
+  }
   chatTarologistAvatar.alt = currentTarologist.name;
   chatTarologistName.textContent = currentTarologist.name;
-  
+
   // Очищаем сообщения
   chatMessages.innerHTML = '';
-  
+
   // Сбрасываем состояние
   chatInputContainer.style.display = 'flex';
   chatTimeoutMessage.style.display = 'none';
   chatInput.value = '';
-  
+
   // Запускаем таймер
   startTimer();
-  
+
   // Приветственное сообщение
   addSystemMessage(`Консультация началась. Длительность: 25 минут.`);
-  
-  // Добавляем данные расклада (если есть)
+
+  // Добавляем кнопку отправки расклада
+  addShareSpreadButton();
+}
+
+// ========================================
+// Кнопка отправки расклада
+// ========================================
+function addShareSpreadButton() {
   const spreadData = getCurrentSpreadData();
-  if (spreadData) {
-    addSystemMessage(`Расклад: ${spreadData.type}`);
+  if (!spreadData) return;
+
+  const btn = document.createElement('button');
+  btn.className = 'share-spread-btn';
+  btn.innerHTML = `
+    <span class="btn-icon">🔮</span>
+    <span>Отправить расклад тарологу</span>
+  `;
+  btn.addEventListener('click', () => sendSpreadToTarologist(spreadData));
+
+  chatMessages.appendChild(btn);
+  scrollToBottom();
+}
+
+async function sendSpreadToTarologist(spreadData) {
+  try {
+    const response = await fetch('/api/spread/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': tg.initData || ''
+      },
+      body: JSON.stringify({
+        initData: tg.initData,
+        tarologistId: currentTarologist.id,
+        spreadType: spreadData.type,
+        cards: spreadData.cards
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Ошибка отправки');
+    }
+
+    addSystemMessage('✅ Расклад отправлен тарологу!');
+    
+    // Отправляем уведомление в чат
+    socket.send(JSON.stringify({
+      type: 'send-message',
+      sessionId: currentSession.id,
+      text: `🔮 Я отправил(а) свой расклад: ${spreadData.type === 'daily' ? 'Ежедневный' : 'На ситуацию'}`,
+      senderId: tg.initDataUnsafe?.user?.id || 'mock_user',
+      senderType: 'client'
+    }));
+
+  } catch (error) {
+    console.error('Ошибка отправки расклада:', error);
+    tg.showAlert('Не удалось отправить расклад. Попробуйте позже.');
   }
 }
 
 function getCurrentSpreadData() {
   // Получаем данные текущего расклада из main.js
-  if (window.tarotState) {
+  if (window.tarotState && window.tarotState.cards) {
     return {
-      type: window.tarotState.currentSpread,
-      cards: window.tarotState.cards
+      type: window.tarotState.currentSpread || 'daily',
+      cards: window.tarotState.cards.map(card => ({
+        id: card.id,
+        name_ru: card.name_ru,
+        position: card.position
+      }))
     };
   }
   return null;
@@ -92,18 +156,18 @@ function getCurrentSpreadData() {
 // WebSocket подключение
 // ========================================
 function connectWebSocket() {
-  const wsUrl = import.meta.env.DEV 
-    ? 'ws://localhost:3001' 
+  const wsUrl = import.meta.env.DEV
+    ? 'ws://localhost:3001'
     : `wss://${window.location.host}`;
-  
+
   socket = new WebSocket(wsUrl);
-  
+
   socket.onopen = () => {
     console.log('WebSocket подключён');
     isConnected = true;
     chatStatus.textContent = 'онлайн';
     chatStatus.style.color = 'var(--gold)';
-    
+
     // Подписываемся на сессию
     socket.send(JSON.stringify({
       type: 'join-session',
@@ -112,19 +176,19 @@ function connectWebSocket() {
       userType: 'client'
     }));
   };
-  
+
   socket.onmessage = (event) => {
     const data = JSON.parse(event.data);
     handleWebSocketMessage(data);
   };
-  
+
   socket.onclose = () => {
     console.log('WebSocket отключён');
     isConnected = false;
     chatStatus.textContent = 'офлайн';
     chatStatus.style.color = 'var(--text-secondary)';
   };
-  
+
   socket.onerror = (error) => {
     console.error('WebSocket ошибка:', error);
   };
@@ -135,22 +199,22 @@ function handleWebSocketMessage(data) {
     case 'messages-history':
       renderMessageHistory(data.messages || data);
       break;
-      
+
     case 'new-message':
-      addMessage(data.text, data.senderType, data.timestamp);
+      addMessageWithMedia(data);
       break;
-      
+
     case 'session-expired':
       handleSessionExpired();
       break;
-      
+
     case 'time-left':
       if (data.timeLeft !== undefined) {
         timeLeft = Math.floor(data.timeLeft);
         updateTimerDisplay();
       }
       break;
-      
+
     case 'error':
       addSystemMessage(`Ошибка: ${data.message}`);
       break;
@@ -163,22 +227,22 @@ function handleWebSocketMessage(data) {
 function startTimer() {
   timeLeft = 1500; // 25 минут
   updateTimerDisplay();
-  
+
   timerInterval = setInterval(() => {
     timeLeft--;
     updateTimerDisplay();
-    
+
     // Предупреждение за 1 минуту
     if (timeLeft === 60) {
       addSystemMessage('⏰ Осталась 1 минута консультации');
       chatTimer.classList.add('urgent');
     }
-    
+
     // Предупреждение за 10 секунд
     if (timeLeft <= 10 && timeLeft > 0) {
       chatTimer.classList.add('urgent');
     }
-    
+
     // Время вышло
     if (timeLeft <= 0) {
       handleSessionExpired();
@@ -201,36 +265,99 @@ function stopTimer() {
 }
 
 // ========================================
-// Сообщения
+// Сообщения с поддержкой медиа
 // ========================================
 function renderMessageHistory(messages) {
   chatMessages.innerHTML = '';
-  
+
   if (!messages || messages.length === 0) {
     addSystemMessage('Начните чат с тарологом. Опишите ваш вопрос.');
     return;
   }
-  
+
   messages.forEach(msg => {
-    addMessage(msg.text, msg.sender_type || msg.senderType, msg.timestamp);
+    if (msg.message_type && msg.message_type !== 'text') {
+      addMessageWithMedia(msg);
+    } else {
+      addMessage(msg.text, msg.sender_type || msg.senderType, msg.timestamp);
+    }
   });
-  
+
+  scrollToBottom();
+}
+
+function addMessageWithMedia(data) {
+  const messageEl = document.createElement('div');
+  messageEl.className = `chat-message ${data.senderType || data.sender_type}`;
+
+  const timeStr = data.timestamp
+    ? formatMessageTime(new Date(data.timestamp))
+    : formatMessageTime(new Date());
+
+  let content = '';
+  const messageType = data.message_type || 'text';
+
+  // Медиа контент
+  if (messageType === 'photo' && data.file_url) {
+    content += `
+      <div class="message-media">
+        <img src="${data.file_url}" alt="Photo" loading="lazy">
+      </div>
+    `;
+  } else if (messageType === 'voice' && data.file_url) {
+    content += `
+      <div class="message-voice">
+        <audio controls src="${data.file_url}"></audio>
+      </div>
+    `;
+  } else if (messageType === 'video' && data.file_url) {
+    content += `
+      <div class="message-video">
+        <video controls src="${data.file_url}"></video>
+      </div>
+    `;
+  } else if (messageType === 'audio' && data.file_url) {
+    content += `
+      <div class="message-audio">
+        <audio controls src="${data.file_url}"></audio>
+      </div>
+    `;
+  } else if (messageType === 'document' && data.file_url) {
+    content += `
+      <div class="message-document">
+        <a href="${data.file_url}" target="_blank" class="document-link">
+          📎 Скачать документ
+        </a>
+      </div>
+    `;
+  }
+
+  // Текст (если есть)
+  if (data.text) {
+    content += `<div class="message-text">${escapeHtml(data.text)}</div>`;
+  }
+
+  // Время
+  content += `<div class="message-time">${timeStr}</div>`;
+
+  messageEl.innerHTML = content;
+  chatMessages.appendChild(messageEl);
   scrollToBottom();
 }
 
 function addMessage(text, senderType, timestamp = null) {
   const messageEl = document.createElement('div');
   messageEl.className = `chat-message ${senderType}`;
-  
-  const timeStr = timestamp 
+
+  const timeStr = timestamp
     ? formatMessageTime(new Date(timestamp))
     : formatMessageTime(new Date());
-  
+
   messageEl.innerHTML = `
     <div class="message-text">${escapeHtml(text)}</div>
     <div class="message-time">${timeStr}</div>
   `;
-  
+
   chatMessages.appendChild(messageEl);
   scrollToBottom();
 }
@@ -255,7 +382,7 @@ function addSystemMessage(text) {
 function sendMessage() {
   const text = chatInput.value.trim();
   if (!text || !isConnected) return;
-  
+
   socket.send(JSON.stringify({
     type: 'send-message',
     sessionId: currentSession.id,
@@ -263,7 +390,7 @@ function sendMessage() {
     senderId: tg.initDataUnsafe?.user?.id || 'mock_user',
     senderType: 'client'
   }));
-  
+
   chatInput.value = '';
   scrollToBottom();
 }
@@ -273,9 +400,9 @@ function scrollToBottom() {
 }
 
 function formatMessageTime(date) {
-  return date.toLocaleTimeString('ru-RU', { 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  return date.toLocaleTimeString('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit'
   });
 }
 
@@ -290,12 +417,12 @@ function escapeHtml(text) {
 // ========================================
 function handleSessionExpired() {
   stopTimer();
-  
+
   chatInputContainer.style.display = 'none';
   chatTimeoutMessage.style.display = 'block';
-  
+
   addSystemMessage('⏰ Время консультации вышло');
-  
+
   // Через 3 секунды переходим к оценке
   setTimeout(() => {
     showRatingScreen();
@@ -313,26 +440,26 @@ function showRatingScreen() {
 function setupRatingListeners() {
   // Выбор звёзд
   const starBtns = starsRating.querySelectorAll('.star-btn');
-  
+
   starBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const rating = parseInt(btn.dataset.rating);
       selectRating(rating);
     });
-    
+
     btn.addEventListener('mouseenter', () => {
       const rating = parseInt(btn.dataset.rating);
       highlightStars(rating);
     });
   });
-  
+
   starsRating.addEventListener('mouseleave', () => {
     highlightStars(selectedRating);
   });
-  
+
   // Отправка оценки
   submitRatingBtn?.addEventListener('click', submitRating);
-  
+
   // Возврат к раскладам
   backToMainRatingBtn?.addEventListener('click', () => {
     switchScreen('main');
@@ -342,18 +469,18 @@ function setupRatingListeners() {
 function selectRating(rating) {
   selectedRating = rating;
   highlightStars(rating);
-  
+
   // Обновляем текст
   const ratingTexts = ['', 'Ужасно', 'Плохо', 'Нормально', 'Хорошо', 'Отлично'];
   selectedRatingText.textContent = ratingTexts[rating];
-  
+
   // Активируем кнопку
   submitRatingBtn.disabled = false;
 }
 
 function highlightStars(rating) {
   const starBtns = starsRating.querySelectorAll('.star-btn');
-  
+
   starBtns.forEach((btn, index) => {
     if (index < rating) {
       btn.textContent = '★';
@@ -375,7 +502,7 @@ function resetRating() {
 
 async function submitRating() {
   if (selectedRating < 1) return;
-  
+
   try {
     if (import.meta.env.DEV) {
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -394,17 +521,17 @@ async function submitRating() {
         })
       });
     }
-    
+
     // Показываем благодарность
     selectedRatingText.textContent = 'Спасибо за оценку!';
     submitRatingBtn.style.display = 'none';
     backToMainRatingBtn.style.display = 'block';
-    
+
     // Закрываем WebSocket
     if (socket) {
       socket.close();
     }
-    
+
   } catch (error) {
     console.error('Ошибка отправки оценки:', error);
     tg.showAlert('Не удалось отправить оценку. Попробуйте позже.');
