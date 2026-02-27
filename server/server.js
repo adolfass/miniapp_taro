@@ -17,6 +17,7 @@ import db, {
   Transaction,
   ChatSession,
   Message,
+  Spread,
   Payout,
   calculatePrice,
   initializeTestData
@@ -748,12 +749,214 @@ app.delete('/api/admin/tarologist/:id', isAdmin, (req, res) => {
 
 /**
  * POST /api/bot/webhook
- * Вебхук для бота админки
+ * Вебхук для бота админки и обработки сообщений от тарологов
  */
-app.post('/api/bot/webhook', (req, res) => {
+app.post('/api/bot/webhook', async (req, res) => {
   const update = req.body;
-  const result = handleWebhookUpdate(update);
-  res.json(result);
+  
+  // Обработка сообщений от тарологов
+  if (update.message) {
+    const chatId = update.message.chat.id;
+    const messageId = update.message.message_id;
+    
+    // Проверяем, является ли отправитель тарологом
+    const tarologist = db.prepare('SELECT id FROM tarologists WHERE telegram_id = ?').get(chatId.toString());
+    
+    if (tarologist) {
+      // Получаем активную сессию таролога
+      const session = db.prepare(`
+        SELECT cs.* FROM chat_sessions cs
+        WHERE cs.tarologist_id = ? AND cs.active = 1 AND cs.completed = 0
+        ORDER BY cs.start_time DESC
+        LIMIT 1
+      `).get(tarologist.id);
+      
+      if (session) {
+        let messageType = 'text';
+        let text = update.message.text || '';
+        let fileId = null;
+        let fileUrl = null;
+        let duration = null;
+        
+        // Определяем тип сообщения и извлекаем данные
+        if (update.message.photo) {
+          messageType = 'photo';
+          const photo = update.message.photo[update.message.photo.length - 1];
+          fileId = photo.file_id;
+          const file = await callTelegram('getFile', { file_id: fileId });
+          if (file.ok) {
+            fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.result.file_path}`;
+          }
+          text = update.message.caption || '';
+        } else if (update.message.voice) {
+          messageType = 'voice';
+          fileId = update.message.voice.file_id;
+          duration = update.message.voice.duration;
+          const file = await callTelegram('getFile', { file_id: fileId });
+          if (file.ok) {
+            fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.result.file_path}`;
+          }
+        } else if (update.message.video) {
+          messageType = 'video';
+          fileId = update.message.video.file_id;
+          duration = update.message.video.duration;
+          const file = await callTelegram('getFile', { file_id: fileId });
+          if (file.ok) {
+            fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.result.file_path}`;
+          }
+          text = update.message.caption || '';
+        } else if (update.message.audio) {
+          messageType = 'audio';
+          fileId = update.message.audio.file_id;
+          duration = update.message.audio.duration;
+          const file = await callTelegram('getFile', { file_id: fileId });
+          if (file.ok) {
+            fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.result.file_path}`;
+          }
+        } else if (update.message.document) {
+          messageType = 'document';
+          fileId = update.message.document.file_id;
+          const file = await callTelegram('getFile', { file_id: fileId });
+          if (file.ok) {
+            fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.result.file_path}`;
+          }
+        }
+        
+        // Сохраняем сообщение в БД
+        const message = Message.createWithMedia({
+          sessionId: session.id,
+          senderId: tarologist.id,
+          senderType: 'tarologist',
+          messageType,
+          text,
+          fileId,
+          fileUrl,
+          duration,
+          telegramMessageId: messageId
+        });
+        
+        // Отправляем сообщение клиенту через WebSocket
+        io.to(`session_${session.id}`).emit('new-message', {
+          id: message.id,
+          text: message.text,
+          message_type: message.message_type,
+          file_url: message.file_url,
+          duration: message.duration,
+          senderId: message.sender_id,
+          senderType: 'tarologist',
+          timestamp: message.timestamp
+        });
+      }
+    }
+    
+    // Обработка команд бота
+    if (update.message.text) {
+      const text = update.message.text;
+      if (text.startsWith('/')) {
+        const [command, ...args] = text.split(' ');
+        await handleCommand(chatId, command.toLowerCase(), args);
+      }
+    }
+  }
+  
+  // Обработка callback query
+  if (update.callback_query) {
+    // Пока ничего не делаем
+  }
+  
+  res.json({ ok: true });
+});
+
+// ========================================
+// API для отправки расклада тарологу
+// ========================================
+
+/**
+ * POST /api/spread/send
+ * Отправить расклад тарологу
+ */
+app.post('/api/spread/send', async (req, res) => {
+  try {
+    const { initData, tarologistId, spreadType, cards } = req.body;
+    
+    // Валидация Telegram данных
+    if (!validateTelegramData(initData)) {
+      return res.status(401).json({ success: false, error: 'Invalid Telegram data' });
+    }
+    
+    const params = new URLSearchParams(initData);
+    const userJson = params.get('user');
+    
+    if (!userJson) {
+      return res.status(400).json({ success: false, error: 'No user data' });
+    }
+    
+    const userData = JSON.parse(userJson);
+    const user = User.findOrCreate(userData.id.toString(), {
+      username: userData.username,
+      first_name: userData.first_name,
+      last_name: userData.last_name
+    });
+    
+    // Создаём расклад
+    const spread = Spread.create({
+      userId: user.id,
+      tarologistId: tarologistId || null,
+      spreadType,
+      cards
+    });
+    
+    // Если указан таролог — отправляем уведомление
+    if (tarologistId) {
+      const tarologist = Tarologist.getById(tarologistId);
+      if (tarologist?.telegram_id) {
+        const cardsList = cards.map(c => c.name_ru).join(', ');
+        await sendTelegramMessage(
+          tarologist.telegram_id,
+          `🔮 Новый расклад от клиента!\n\nТип: ${spreadType === 'daily' ? 'Ежедневный' : 'На ситуацию'}\nКарты: ${cardsList}\n\nНачните чат в приложении.`
+        );
+      }
+    }
+    
+    res.json({ success: true, data: spread });
+  } catch (error) {
+    console.error('Ошибка отправки расклада:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/spread/my
+ * Получить мои расклады
+ */
+app.get('/api/spread/my', (req, res) => {
+  try {
+    const initData = req.headers['x-telegram-init-data'];
+    
+    if (!initData || !validateTelegramData(initData)) {
+      return res.status(401).json({ success: false, error: 'Invalid Telegram data' });
+    }
+    
+    const params = new URLSearchParams(initData);
+    const userJson = params.get('user');
+    
+    if (!userJson) {
+      return res.status(400).json({ success: false, error: 'No user data' });
+    }
+    
+    const userData = JSON.parse(userJson);
+    const user = User.getByTelegramId(userData.id.toString());
+    
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    const spreads = Spread.getByUser(user.id);
+    res.json({ success: true, data: spreads });
+  } catch (error) {
+    console.error('Ошибка получения раскладов:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
 });
 
 // ========================================

@@ -71,15 +71,33 @@ db.exec(`
     FOREIGN KEY (tarologist_id) REFERENCES tarologists(id)
   );
 
-  -- Таблица сообщений
+  -- Таблица сообщений (обновлённая)
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id INTEGER NOT NULL,
     sender_id INTEGER NOT NULL,
-    sender_type TEXT NOT NULL,
-    text TEXT NOT NULL,
+    sender_type TEXT NOT NULL, -- 'client' | 'tarologist'
+    message_type TEXT DEFAULT 'text', -- 'text' | 'photo' | 'voice' | 'video' | 'audio' | 'document'
+    text TEXT,
+    file_id TEXT,
+    file_url TEXT,
+    duration INTEGER, -- для voice/video
+    telegram_message_id INTEGER,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
+  );
+
+  -- Таблица раскладов (для отправки тарологу)
+  CREATE TABLE IF NOT EXISTS spreads (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    tarologist_id INTEGER,
+    spread_type TEXT NOT NULL, -- 'daily' | 'path'
+    cards TEXT NOT NULL, -- JSON массив карт
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_sent BOOLEAN DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (tarologist_id) REFERENCES tarologists(id)
   );
 
   -- Таблица выплат тарологам
@@ -100,8 +118,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_transactions_tarologist ON transactions(tarologist_id);
   CREATE INDEX IF NOT EXISTS idx_chat_sessions_active ON chat_sessions(active);
   CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
+  CREATE INDEX IF NOT EXISTS idx_messages_type ON messages(message_type);
   CREATE INDEX IF NOT EXISTS idx_payouts_tarologist ON payouts(tarologist_id);
   CREATE INDEX IF NOT EXISTS idx_payouts_status ON payouts(status);
+  CREATE INDEX IF NOT EXISTS idx_spreads_user ON spreads(user_id);
+  CREATE INDEX IF NOT EXISTS idx_spreads_sent ON spreads(is_sent);
 `);
 
 // ========================================
@@ -304,12 +325,33 @@ export const ChatSession = {
 };
 
 export const Message = {
+  // Создать текстовое сообщение
   create(data) {
     const stmt = db.prepare(`
-      INSERT INTO messages (session_id, sender_id, sender_type, text)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO messages (session_id, sender_id, sender_type, text, message_type)
+      VALUES (?, ?, ?, ?, 'text')
     `);
     const result = stmt.run(data.sessionId, data.senderId, data.senderType, data.text);
+    return this.getById(result.lastInsertRowid);
+  },
+
+  // Создать сообщение с медиа
+  createWithMedia(data) {
+    const stmt = db.prepare(`
+      INSERT INTO messages (session_id, sender_id, sender_type, message_type, text, file_id, file_url, duration, telegram_message_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      data.sessionId,
+      data.senderId,
+      data.senderType,
+      data.messageType || 'text',
+      data.text || null,
+      data.fileId || null,
+      data.fileUrl || null,
+      data.duration || null,
+      data.telegramMessageId || null
+    );
     return this.getById(result.lastInsertRowid);
   },
 
@@ -325,6 +367,81 @@ export const Message = {
       ORDER BY timestamp ASC
     `);
     return stmt.all(sessionId);
+  },
+
+  // Получить последние сообщения
+  getRecent(limit = 50) {
+    const stmt = db.prepare(`
+      SELECT m.*, cs.user_id, cs.tarologist_id
+      FROM messages m
+      JOIN chat_sessions cs ON m.session_id = cs.id
+      ORDER BY m.timestamp DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit);
+  }
+};
+
+export const Spread = {
+  // Создать расклад
+  create(data) {
+    const stmt = db.prepare(`
+      INSERT INTO spreads (user_id, tarologist_id, spread_type, cards)
+      VALUES (?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      data.userId,
+      data.tarologistId || null,
+      data.spreadType,
+      JSON.stringify(data.cards)
+    );
+    return this.getById(result.lastInsertRowid);
+  },
+
+  getById(id) {
+    const stmt = db.prepare(`
+      SELECT s.*, u.telegram_id as user_telegram_id, t.name as tarologist_name, t.telegram_id as tarologist_telegram_id
+      FROM spreads s
+      LEFT JOIN users u ON s.user_id = u.id
+      LEFT JOIN tarologists t ON s.tarologist_id = t.id
+      WHERE s.id = ?
+    `);
+    return stmt.get(id);
+  },
+
+  // Получить несent расклады
+  getUnsent() {
+    const stmt = db.prepare(`
+      SELECT s.*, u.telegram_id as user_telegram_id, t.name as tarologist_name, t.telegram_id as tarologist_telegram_id
+      FROM spreads s
+      LEFT JOIN users u ON s.user_id = u.id
+      LEFT JOIN tarologists t ON s.tarologist_id = t.id
+      WHERE s.is_sent = 0
+      ORDER BY s.created_at ASC
+    `);
+    return stmt.all();
+  },
+
+  // Отметить как отправленный
+  markSent(id) {
+    const stmt = db.prepare(`
+      UPDATE spreads
+      SET is_sent = 1
+      WHERE id = ?
+    `);
+    return stmt.run(id);
+  },
+
+  // Получить расклады пользователя
+  getByUser(userId) {
+    const stmt = db.prepare(`
+      SELECT s.*, t.name as tarologist_name
+      FROM spreads s
+      LEFT JOIN tarologists t ON s.tarologist_id = t.id
+      WHERE s.user_id = ?
+      ORDER BY s.created_at DESC
+    `);
+    return stmt.all(userId);
   }
 };
 
