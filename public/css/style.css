@@ -566,7 +566,7 @@ html, body {
 
 /* Название карты - крупное, магическое, золотое (МОДАЛЬНОЕ ОКНО) */
 .card.expanded .card-meaning .card-name {
-  font-size: 16px;
+  font-size: 12px;
   margin-bottom: 6px;
   display: block;
   font-family: 'Cinzel', 'Cormorant Garamond', serif;
@@ -582,7 +582,7 @@ html, body {
 
 /* Описание карты - крупное, читаемое, Markdown-стиль (МОДАЛЬНОЕ ОКНО) */
 .card.expanded .card-meaning .card-description {
-  font-size: 4.5px;
+  font-size: 3.5px;
   line-height: 1.4;
   display: block;
   word-break: break-word;
