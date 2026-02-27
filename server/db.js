@@ -82,11 +82,26 @@ db.exec(`
     FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
   );
 
+  -- Таблица выплат тарологам
+  CREATE TABLE IF NOT EXISTS payouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tarologist_id INTEGER NOT NULL,
+    amount INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    telegram_payment_id TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    FOREIGN KEY (tarologist_id) REFERENCES tarologists(id)
+  );
+
   -- Индексы для производительности
   CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
   CREATE INDEX IF NOT EXISTS idx_transactions_tarologist ON transactions(tarologist_id);
   CREATE INDEX IF NOT EXISTS idx_chat_sessions_active ON chat_sessions(active);
   CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
+  CREATE INDEX IF NOT EXISTS idx_payouts_tarologist ON payouts(tarologist_id);
+  CREATE INDEX IF NOT EXISTS idx_payouts_status ON payouts(status);
 `);
 
 // ========================================
@@ -305,11 +320,88 @@ export const Message = {
 
   getBySession(sessionId) {
     const stmt = db.prepare(`
-      SELECT * FROM messages 
-      WHERE session_id = ? 
+      SELECT * FROM messages
+      WHERE session_id = ?
       ORDER BY timestamp ASC
     `);
     return stmt.all(sessionId);
+  }
+};
+
+export const Payout = {
+  // Создать выплату
+  create(data) {
+    const stmt = db.prepare(`
+      INSERT INTO payouts (tarologist_id, amount, status, notes)
+      VALUES (?, ?, ?, ?)
+    `);
+    const result = stmt.run(data.tarologistId, data.amount, data.status || 'pending', data.notes || null);
+    return this.getById(result.lastInsertRowid);
+  },
+
+  // Получить выплату по ID
+  getById(id) {
+    const stmt = db.prepare(`
+      SELECT p.*, t.name as tarologist_name
+      FROM payouts p
+      JOIN tarologists t ON p.tarologist_id = t.id
+      WHERE p.id = ?
+    `);
+    return stmt.get(id);
+  },
+
+  // Получить все выплаты
+  getAll() {
+    const stmt = db.prepare(`
+      SELECT p.*, t.name as tarologist_name
+      FROM payouts p
+      JOIN tarologists t ON p.tarologist_id = t.id
+      ORDER BY p.created_at DESC
+    `);
+    return stmt.all();
+  },
+
+  // Получить выплаты по статусу
+  getByStatus(status) {
+    const stmt = db.prepare(`
+      SELECT p.*, t.name as tarologist_name
+      FROM payouts p
+      JOIN tarologists t ON p.tarologist_id = t.id
+      WHERE p.status = ?
+      ORDER BY p.created_at DESC
+    `);
+    return stmt.all(status);
+  },
+
+  // Отметить выплату как выполненную
+  markCompleted(id) {
+    const stmt = db.prepare(`
+      UPDATE payouts
+      SET status = 'completed', completed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    return stmt.run(id);
+  },
+
+  // Получить баланс таролога (сумма транзакций - сумма выплат)
+  getTarologistBalance(tarologistId) {
+    // Сумма всех завершённых транзакций (tarologist_cut)
+    const earningsStmt = db.prepare(`
+      SELECT COALESCE(SUM(tarologist_cut), 0) as total
+      FROM transactions
+      WHERE tarologist_id = ? AND status = 'completed'
+    `);
+    const earnings = earningsStmt.get(tarologistId).total;
+
+    // Сумма всех выплат
+    const payoutsStmt = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) as total
+      FROM payouts
+      WHERE tarologist_id = ? AND status = 'completed'
+    `);
+    const paid = payoutsStmt.get(tarologistId).total;
+
+    return earnings - paid;
   }
 };
 

@@ -11,15 +11,17 @@ import axios from 'axios';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 
-import db, { 
-  Tarologist, 
-  User, 
-  Transaction, 
-  ChatSession, 
+import db, {
+  Tarologist,
+  User,
+  Transaction,
+  ChatSession,
   Message,
+  Payout,
   calculatePrice,
-  initializeTestData 
+  initializeTestData
 } from './db.js';
+import { handleWebhookUpdate } from './admin-bot.js';
 
 dotenv.config();
 
@@ -353,6 +355,239 @@ app.get('/api/session/:id/messages', (req, res) => {
     console.error('Ошибка получения сообщений:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
+});
+
+// ========================================
+// Admin API Routes
+// ========================================
+
+/**
+ * Middleware для проверки администратора
+ */
+function isAdmin(req, res, next) {
+  const telegramInitData = req.headers['x-telegram-init-data'];
+  
+  if (!telegramInitData) {
+    return res.status(401).json({ success: false, error: 'No Telegram data' });
+  }
+  
+  // Валидация данных Telegram
+  const params = new URLSearchParams(telegramInitData);
+  const hash = params.get('hash');
+  params.delete('hash');
+  
+  const dataCheckString = Array.from(params.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+  
+  const secretKey = crypto.createHmac('sha256', 'WebAppData')
+    .update(BOT_TOKEN)
+    .digest();
+  
+  const computedHash = crypto.createHmac('sha256', secretKey)
+    .update(dataCheckString)
+    .digest('hex');
+  
+  if (computedHash !== hash) {
+    return res.status(401).json({ success: false, error: 'Invalid Telegram data' });
+  }
+  
+  // Проверяем, что это админ (по ID из .env или первый пользователь)
+  const userJson = params.get('user');
+  if (!userJson) {
+    return res.status(401).json({ success: false, error: 'No user data' });
+  }
+  
+  const userData = JSON.parse(userJson);
+  const adminId = process.env.ADMIN_TELEGRAM_ID;
+  
+  // Если ADMIN_TELEGRAM_ID не установлен - разрешаем первому пользователю
+  if (adminId && userData.id.toString() !== adminId) {
+    return res.status(403).json({ success: false, error: 'Access denied' });
+  }
+  
+  req.adminUser = userData;
+  next();
+}
+
+/**
+ * GET /api/admin/stats
+ * Получить общую статистику для админки
+ */
+app.get('/api/admin/stats', isAdmin, (req, res) => {
+  try {
+    // Общий доход (все завершённые транзакции)
+    const revenueStmt = db.prepare(`
+      SELECT 
+        COALESCE(SUM(stars_amount), 0) as total,
+        COALESCE(SUM(developer_cut), 0) as dev_cut,
+        COALESCE(SUM(tarologist_cut), 0) as taro_cut
+      FROM transactions
+      WHERE status = 'completed'
+    `);
+    const revenue = revenueStmt.get();
+    
+    // Количество тарологов
+    const tarologistsStmt = db.prepare('SELECT COUNT(*) as count FROM tarologists');
+    const totalTarologists = tarologistsStmt.get().count;
+    
+    // Количество консультаций
+    const sessionsStmt = db.prepare('SELECT COUNT(*) as count FROM chat_sessions WHERE completed = 1');
+    const totalSessions = sessionsStmt.get().count;
+    
+    // Сумма к выплате (баланс всех тарологов)
+    const payoutStmt = db.prepare(`
+      SELECT 
+        COALESCE(SUM(t.tarologist_cut), 0) - COALESCE(SUM(p.amount), 0) as total_payout
+      FROM tarologists t
+      LEFT JOIN transactions tr ON t.id = tr.tarologist_id AND tr.status = 'completed'
+      LEFT JOIN payouts p ON t.id = p.tarologist_id AND p.status = 'completed'
+    `);
+    const totalPayout = payoutStmt.get().total_payout || 0;
+    
+    res.json({
+      totalRevenue: revenue.total,
+      developerCut: revenue.dev_cut,
+      tarologistCut: revenue.tar_cut,
+      totalTarologists,
+      totalSessions,
+      totalPayout
+    });
+  } catch (error) {
+    console.error('Ошибка получения статистики:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/tarologists
+ * Получить список тарологов с балансом
+ */
+app.get('/api/admin/tarologists', isAdmin, (req, res) => {
+  try {
+    const tarologists = Tarologist.getAll();
+    
+    // Добавляем баланс для каждого
+    const tarologistsWithBalance = tarologists.map(t => ({
+      ...t,
+      balance: Payout.getTarologistBalance(t.id)
+    }));
+    
+    res.json(tarologistsWithBalance);
+  } catch (error) {
+    console.error('Ошибка получения тарологов:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/transactions
+ * Получить транзакции с фильтрацией
+ */
+app.get('/api/admin/transactions', isAdmin, (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    
+    let query;
+    if (days === 'all') {
+      query = db.prepare(`
+        SELECT 
+          t.*,
+          tar.name as tarologist_name
+        FROM transactions t
+        JOIN tarologists tar ON t.tarologist_id = tar.id
+        WHERE t.status = 'completed'
+        ORDER BY t.created_at DESC
+        LIMIT 100
+      `);
+    } else {
+      query = db.prepare(`
+        SELECT 
+          t.*,
+          tar.name as tarologist_name
+        FROM transactions t
+        JOIN tarologists tar ON t.tarologist_id = tar.id
+        WHERE t.status = 'completed'
+          AND t.created_at >= datetime('now', '-' || ? || ' days')
+        ORDER BY t.created_at DESC
+        LIMIT 100
+      `);
+    }
+    
+    const transactions = days === 'all' 
+      ? query.all()
+      : query.all(days);
+    
+    res.json(transactions);
+  } catch (error) {
+    console.error('Ошибка получения транзакций:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/payouts
+ * Получить все выплаты
+ */
+app.get('/api/admin/payouts', isAdmin, (req, res) => {
+  try {
+    const payouts = Payout.getAll();
+    res.json(payouts);
+  } catch (error) {
+    console.error('Ошибка получения выплат:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/admin/payouts
+ * Создать выплату (отметить как выполненную)
+ */
+app.post('/api/admin/payouts', isAdmin, (req, res) => {
+  try {
+    const { tarologist_id, amount } = req.body;
+    
+    if (!tarologist_id || !amount || amount <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid data' });
+    }
+    
+    // Проверяем баланс таролога
+    const balance = Payout.getTarologistBalance(tarologist_id);
+    if (balance < amount) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Недостаточно средств. Баланс: ${balance}` 
+      });
+    }
+    
+    // Создаём выплату
+    const payout = Payout.create({
+      tarologistId: tarologist_id,
+      amount: amount,
+      status: 'completed',
+      notes: `Выплата от ${req.adminUser.first_name || 'Admin'}`
+    });
+    
+    res.json({ success: true, data: payout });
+  } catch (error) {
+    console.error('Ошибка создания выплаты:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ========================================
+// Bot Webhook (опционально)
+// ========================================
+
+/**
+ * POST /api/bot/webhook
+ * Вебхук для бота админки
+ */
+app.post('/api/bot/webhook', (req, res) => {
+  const update = req.body;
+  const result = handleWebhookUpdate(update);
+  res.json(result);
 });
 
 // ========================================

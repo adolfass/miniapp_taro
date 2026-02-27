@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Админ-панель — Золотое Таро</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/admin.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <canvas id="stars-canvas"></canvas>
+    
+    <!-- Главный экран: статистика -->
+    <section id="screen-dashboard" class="screen active">
+      <h1 class="admin-title">Админ-панель</h1>
+      
+      <!-- Общая статистика -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">💰</div>
+          <div class="stat-value" id="total-revenue">0</div>
+          <div class="stat-label">Общий доход (звёзд)</div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon">📊</div>
+          <div class="stat-value" id="developer-cut">0</div>
+          <div class="stat-label">Комиссия 10% (звёзд)</div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon">👥</div>
+          <div class="stat-value" id="total-tarologists">0</div>
+          <div class="stat-label">Тарологов</div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon">💬</div>
+          <div class="stat-value" id="total-sessions">0</div>
+          <div class="stat-label">Консультаций</div>
+        </div>
+      </div>
+      
+      <!-- Баланс к выплате -->
+      <div class="payout-summary">
+        <h2 class="section-title">💸 К выплате тарологам</h2>
+        <div class="payout-total">
+          <span class="payout-amount" id="total-payout">0</span>
+          <span class="payout-currency">звёзд</span>
+        </div>
+        <button class="action-btn" id="show-payouts-btn">
+          Показать выплаты
+        </button>
+      </div>
+      
+      <!-- Кнопки навигации -->
+      <div class="nav-buttons">
+        <button class="nav-btn" id="tarologists-btn">
+          👥 Тарологи
+        </button>
+        <button class="nav-btn" id="transactions-btn">
+          📋 Транзакции
+        </button>
+      </div>
+    </section>
+    
+    <!-- Экран: список тарологов -->
+    <section id="screen-tarologists-list" class="screen">
+      <h2 class="screen-title">Тарологи</h2>
+      
+      <div class="tarologists-admin-list" id="tarologists-admin-list">
+        <!-- Загружается динамически -->
+      </div>
+      
+      <div class="loading" id="tarologists-loading">
+        <div class="spinner"></div>
+        <p>Загрузка...</p>
+      </div>
+      
+      <button class="back-btn" id="back-to-dashboard-tarologists">
+        ← Назад
+      </button>
+    </section>
+    
+    <!-- Экран: транзакции -->
+    <section id="screen-transactions" class="screen">
+      <h2 class="screen-title">Транзакции</h2>
+      
+      <!-- Фильтры -->
+      <div class="filters">
+        <select class="filter-select" id="filter-period">
+          <option value="7">За 7 дней</option>
+          <option value="30" selected>За 30 дней</option>
+          <option value="90">За 90 дней</option>
+          <option value="all">Все</option>
+        </select>
+      </div>
+      
+      <div class="transactions-list" id="transactions-list">
+        <!-- Загружается динамически -->
+      </div>
+      
+      <div class="loading" id="transactions-loading">
+        <div class="spinner"></div>
+        <p>Загрузка...</p>
+      </div>
+      
+      <button class="back-btn" id="back-to-dashboard-transactions">
+        ← Назад
+      </button>
+    </section>
+    
+    <!-- Экран: выплаты -->
+    <section id="screen-payouts" class="screen">
+      <h2 class="screen-title">Выплаты тарологам</h2>
+      
+      <div class="payouts-list" id="payouts-list">
+        <!-- Загружается динамически -->
+      </div>
+      
+      <div class="loading" id="payouts-loading">
+        <div class="spinner"></div>
+        <p>Загрузка...</p>
+      </div>
+      
+      <button class="back-btn" id="back-to-dashboard-payouts">
+        ← Назад
+      </button>
+    </section>
+    
+    <!-- Модальное окно: детальная информация о тарологе -->
+    <div class="modal" id="tarologist-modal">
+      <div class="modal-content modal-tarologist">
+        <h3 class="modal-title" id="modal-tarologist-name">Имя таролога</h3>
+        
+        <div class="tarologist-stats">
+          <div class="stat-row">
+            <span class="stat-label">Баланс:</span>
+            <span class="stat-value stars" id="modal-tarologist-balance">0 ⭐</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Консультаций:</span>
+            <span class="stat-value" id="modal-tarologist-sessions">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Рейтинг:</span>
+            <span class="stat-value" id="modal-tarologist-rating">0.0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Всего заработано:</span>
+            <span class="stat-value stars" id="modal-tarologist-total">0 ⭐</span>
+          </div>
+        </div>
+        
+        <div class="modal-actions">
+          <button class="action-btn action-btn-primary" id="mark-payout-btn">
+            ✅ Отметить выплату
+          </button>
+          <button class="action-btn action-btn-secondary" id="close-modal-btn">
+            Закрыть
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Модальное окно: подтверждение выплаты -->
+    <div class="modal" id="payout-confirm-modal">
+      <div class="modal-content modal-confirm">
+        <h3 class="modal-title">Подтверждение выплаты</h3>
+        
+        <p class="confirm-text">
+          Выплата <strong id="confirm-amount">0</strong> звёзд тарологу <strong id="confirm-name">Имя</strong>?
+        </p>
+        
+        <div class="confirm-actions">
+          <button class="action-btn action-btn-secondary" id="cancel-payout-btn">
+            Отмена
+          </button>
+          <button class="action-btn action-btn-primary" id="confirm-payout-btn">
+            ✅ Подтвердить
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>
