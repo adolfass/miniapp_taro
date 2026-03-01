@@ -9,6 +9,7 @@ import { initShake, stopShake } from './shake.js';
 import { getRandomCards } from './cards.js';
 import { getDailyPosition, formatDailySpreadText } from './spreads.js';
 import { getDescriptionHTML } from './description.js';
+import { openTarologistsScreen } from './tarologists.js';
 
 // ========================================
 // Telegram WebApp Mock для разработки
@@ -36,6 +37,17 @@ if (import.meta.env.DEV) {
       sendData: (data) => console.log('sendData:', data),
       openInvoice: (url, callback) => {
         console.log('Opening invoice:', url);
+        // Пытаемся открыть Telegram через URL схему
+        const telegramUrl = url.replace('https://t.me/', 'tg://resolve?domain=');
+        
+        // Пробуем открыть Telegram
+        const opened = window.open(telegramUrl, '_blank');
+        
+        // Если не удалось открыть Telegram, пробуем оригинальную ссылку
+        if (!opened || opened.closed || typeof opened.closed === 'undefined') {
+          window.open(url, '_blank');
+        }
+        
         // Имитируем успешную оплату через 2 секунды
         setTimeout(() => callback('paid'), 2000);
       }
@@ -225,13 +237,13 @@ function setupEventListeners() {
   
   // Расклад на ситуацию — активация
   document.getElementById('activate-btn').addEventListener('click', performSituationSpread);
-  
+
   // Ежедневный расклад — действия
-  document.getElementById('daily-share-btn').addEventListener('click', shareDailyResult);
+  document.getElementById('daily-share-btn').addEventListener('click', openTarologistsFromResult);
   document.getElementById('daily-new-btn').addEventListener('click', () => switchScreen('spreads'));
-  
+
   // Расклад на ситуацию — действия
-  document.getElementById('situation-share-btn').addEventListener('click', shareSituationResult);
+  document.getElementById('situation-share-btn').addEventListener('click', openTarologistsFromResult);
   document.getElementById('situation-new-btn').addEventListener('click', () => switchScreen('spreads'));
   
   // Закрытие модального окна настроек по клику вне
@@ -493,7 +505,7 @@ function revealSituationCard(index) {
 
 function shareSituationResult() {
   const text = formatSituationResult();
-  
+
   if (tg.Clipboard) {
     tg.Clipboard.writeText(text, (success) => {
       if (success) {
@@ -505,6 +517,14 @@ function shareSituationResult() {
       tg.showAlert('Результат скопирован в буфер обмена!');
     });
   }
+}
+
+// ========================================
+// Открытие экрана выбора таролога
+// ========================================
+function openTarologistsFromResult() {
+  // Открываем экран выбора таролога
+  openTarologistsScreen();
 }
 
 function formatSituationResult() {

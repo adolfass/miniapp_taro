@@ -78,6 +78,28 @@ function setupEventListeners() {
 // Экран выбора таролога
 // ========================================
 export async function openTarologistsScreen() {
+  // Проверка: запущено ли приложение в Telegram
+  const isTelegram = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
+  
+  if (!isTelegram) {
+    // Показываем предупреждение
+    const confirmed = confirm(
+      '⚠️ Внимание!\n\n' +
+      'Вы открыли приложение в браузере, а не в Telegram.\n\n' +
+      'Для полноценной работы (оплата, чат с тарологом) откройте приложение в Telegram:\n\n' +
+      '1. Откройте Telegram на ПК или телефоне\n' +
+      '2. Найдите бота @YourBotName\n' +
+      '3. Нажмите "Запустить Mini App"\n\n' +
+      'Нажмите OK чтобы продолжить в демо-режиме или Отмена для закрытия.'
+    );
+    
+    if (!confirmed) {
+      // Попытка открыть Telegram
+      window.open('https://t.me/YourBotName', '_blank');
+      return;
+    }
+  }
+  
   switchScreen('tarologists');
   await loadTarologists();
 }
@@ -219,29 +241,40 @@ function closePaymentModal() {
 
 async function confirmPayment() {
   if (!selectedTarologist) return;
-  
+
   // Получаем данные расклада для передачи тарологу
   const spreadData = getCurrentResult();
-  
+
   try {
     // Для локальной разработки имитируем оплату
     if (import.meta.env.DEV) {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       currentTransaction = {
         id: Date.now(),
         tarologistId: selectedTarologist.id,
         starsAmount: selectedTarologist.price
       };
-      
+
       closePaymentModal();
       showPaymentSuccess();
       return;
     }
-    
+
+    // Проверка: запущено ли в Telegram
+    const isTelegram = tg && tg.initData;
+    if (!isTelegram) {
+      tg.showAlert(
+        '⚠️ Оплата недоступна\n\n' +
+        'Вы открыли приложение вне Telegram.\n' +
+        'Для оплаты откройте приложение в Telegram и попробуйте снова.'
+      );
+      return;
+    }
+
     // Получаем initData из Telegram
     const initData = tg.initData;
-    
+
     // Создаём инвойс
     const response = await fetch('/api/create-invoice', {
       method: 'POST',
@@ -253,18 +286,18 @@ async function confirmPayment() {
         initData
       })
     });
-    
+
     const data = await response.json();
-    
+
     if (!data.success) {
       throw new Error(data.error || 'Failed to create invoice');
     }
-    
+
     currentTransaction = {
       id: data.data.transactionId,
       starsAmount: data.data.starsAmount
     };
-    
+
     // Открываем инвойс Telegram
     tg.openInvoice(data.data.invoiceLink, async (status) => {
       if (status === 'paid') {
@@ -273,7 +306,7 @@ async function confirmPayment() {
         tg.showAlert('Оплата не была завершена. Попробуйте снова.');
       }
     });
-    
+
     closePaymentModal();
   } catch (error) {
     console.error('Ошибка оплаты:', error);
