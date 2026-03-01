@@ -269,13 +269,13 @@
   </div>
   
   <script type="module" src="/js/admin.js"></script>
-  
+
   <!-- Проверка авторизации -->
   <script>
     // Проверка авторизации ПЕРЕД загрузкой приложения
     (function() {
       const tg = window.Telegram?.WebApp;
-      
+
       // Если нет Telegram WebApp initData — блокируем доступ
       if (!tg || !tg.initData) {
         document.body.innerHTML = `
@@ -300,9 +300,10 @@
             </p>
           </div>
         `;
-        throw new Error('No Telegram initData');
+        console.error('No Telegram initData - access denied');
+        return;
       }
-      
+
       // Проверяем валидность initData через сервер
       fetch('/api/admin/check-auth', {
         method: 'POST',
@@ -336,9 +337,10 @@
               </p>
             </div>
           `;
-          throw new Error('Access denied: ' + data.error);
+          console.error('Access denied:', data.error);
+          return;
         }
-        
+
         // Авторизация успешна — показываем приложение
         console.log('✅ Admin authenticated:', data.data.user);
       })
