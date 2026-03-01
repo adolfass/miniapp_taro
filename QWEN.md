@@ -12,6 +12,7 @@
 - Частицы (sparkles) при перевороте карт
 - Интеграция с Telegram WebApp API
 - Звёздный фон на Canvas
+- **Telegram Stars интеграция** — оплата консультаций, чат с тарологом, оценка
 
 ## Технический стек
 
@@ -23,7 +24,9 @@
 | Анимации | `transform`, `opacity`, Canvas для частиц и звёзд |
 | Изображения | WebP |
 | Платформа | Telegram WebApp |
-| Деплой | GitHub Pages / VDS (Nginx) |
+| Сервер | Node.js + Express + Socket.IO |
+| БД | SQLite (better-sqlite3) |
+| Деплой | GitHub Pages / VDS (Nginx + PM2) |
 
 ## Структура проекта
 
@@ -31,38 +34,51 @@
 miniapp/
 ├── public/
 │   ├── index.html              # Главная страница
+│   ├── admin.html              # Админ-панель
 │   ├── css/
-│   │   └── style.css           # Все стили (1338 строк)
+│   │   └── style.css           # Все стили (2086 строк)
 │   ├── js/
-│   │   ├── main.js             # Точка входа, Telegram WebApp
+│   │   ├── main.js             # Точка входа, Telegram WebApp + Mock
 │   │   ├── cards.js            # Данные 78 карт (22 Старших + 56 Младших)
 │   │   ├── spreads.js          # Логика раскладов
 │   │   ├── animations.js       # Анимации + Canvas частицы и звёзды
 │   │   ├── sound.js            # Управление звуком тасовки
 │   │   ├── shake.js            # Детекция встряхивания (акселерометр)
-│   │   └── description.js      # Описание расклада «Путь»
+│   │   ├── description.js      # Описание расклада «Путь»
+│   │   ├── tarologists.js      # Экран выбора таролога + Mock оплаты
+│   │   └── chat.js             # Чат с тарологом (WebSocket)
 │   └── assets/
 │       ├── card-backs/back.webp
 │       ├── card-faces/major/   # Изображения Старших Арканов
 │       └── sounds/shuffle.mp3  # Звук тасовки
+├── server/
+│   ├── server.js               # Express сервер (API + WebSocket)
+│   ├── admin-bot.js            # Бот админки
+│   ├── db.js                   # База данных (SQLite)
+│   ├── package.json            # Зависимости сервера
+│   └── .env.example            # Шаблон переменных окружения
 ├── .github/workflows/
 │   └── deploy.yml              # CI/CD для GitHub Pages
 ├── dist/                       # Сборка продакшена
 ├── package.json
 ├── vite.config.js
 ├── README.md                   # Основная документация
-├── AGENTS.md                   # Задание на интеграцию платежей (Telegram Stars)
+├── AGENTS.md                   # Роль менеджера проекта
 ├── DEPLOY.md                   # Инструкция по деплою на VDS
-└── deploy.sh                   # Скрипт деплоя на сервер
+├── SETUP.md                    # Полная инструкция по настройке
+├── NGINX-API-SETUP.md          # Настройка Nginx
+├── deploy.sh                   # Скрипт деплоя на сервер
+└── setup-server.sh             # Скрипт настройки сервера
 ```
 
 ## Команды разработки
 
+### Клиентская часть (локально, без ключей)
 ```bash
 # Установка зависимостей
 npm install
 
-# Запуск dev-сервера (порт 3000)
+# Запуск dev-сервера (порт 3000) — работает БЕЗ ключей Telegram
 npm run dev
 
 # Сборка продакшена
@@ -73,6 +89,102 @@ npm run preview
 
 # Деплой на GitHub Pages
 npm run deploy
+```
+
+### Серверная часть (опционально, для тестирования с реальным API)
+```bash
+cd server
+
+# Установка зависимостей
+npm install
+
+# Запуск dev-сервера (порт 3001)
+npm run dev
+```
+
+## Локальная разработка без ключей Telegram
+
+При запуске через `npm run dev` приложение автоматически использует **Mock-режим**:
+
+### 1. Mock Telegram WebApp API (`public/js/main.js`)
+```javascript
+window.Telegram = {
+  WebApp: {
+    initData: 'user=test',
+    initDataUnsafe: { user: { id: 123, first_name: 'Test' } },
+    colorScheme: 'dark',
+    themeParams: {},
+    expand: () => {},
+    ready: () => {},
+    showAlert: (msg) => alert(msg),
+    showConfirm: (msg, callback) => callback(confirm(msg)),
+    HapticFeedback: {
+      impactOccurred: () => {},
+      notificationOccurred: () => {}
+    },
+    Clipboard: {
+      writeText: (text, callback) => {
+        navigator.clipboard.writeText(text).then(() => callback(true));
+      }
+    },
+    sendData: (data) => console.log('sendData:', data),
+    openInvoice: (url, callback) => {
+      console.log('Opening invoice:', url);
+      setTimeout(() => callback('paid'), 2000); // Имитация оплаты
+    }
+  }
+};
+```
+
+### 2. Mock тарологи (`public/js/tarologists.js`)
+```javascript
+function getMockTarologists() {
+  return [
+    {
+      id: 1,
+      name: 'Александра',
+      photo_url: 'https://via.placeholder.com/200x200/8B5CF6/FFFFFF?text=A',
+      description: 'Профессиональный таролог с 5-летним опытом...',
+      rating: 4.8,
+      total_ratings: 127,
+      sessions_completed: 45,
+      price: 48
+    },
+    // ... ещё 2 таролога
+  ];
+}
+```
+
+### 3. Mock оплаты (`public/js/tarologists.js`)
+```javascript
+async function confirmPayment() {
+  if (import.meta.env.DEV) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    currentTransaction = {
+      id: Date.now(),
+      tarologistId: selectedTarologist.id,
+      starsAmount: selectedTarologist.price
+    };
+    
+    closePaymentModal();
+    showPaymentSuccess();
+    return;
+  }
+  // Реальный запрос к API...
+}
+```
+
+### 4. Mock WebSocket для чата (`public/js/chat.js`)
+```javascript
+const wsUrl = import.meta.env.DEV
+  ? 'ws://localhost:3001'  // Если сервер запущен
+  : `wss://${window.location.host}`;
+
+// В режиме DEV сообщения эмулируются локально
+if (import.meta.env.DEV) {
+  // Эмуляция получения сообщений
+}
 ```
 
 ## Дизайн-система
@@ -104,24 +216,6 @@ npm run deploy
 
 ## Интеграция с Telegram
 
-### Mock для локальной разработки
-В `main.js` реализован мок Telegram WebApp API для разработки без реального бота:
-
-```javascript
-window.Telegram = {
-  WebApp: {
-    initData: 'user=test',
-    initDataUnsafe: { user: { id: 123, first_name: 'Test' } },
-    colorScheme: 'dark',
-    expand: () => {},
-    ready: () => {},
-    HapticFeedback: { impactOccurred: () => {}, notificationOccurred: () => {} },
-    Clipboard: { writeText: (text, callback) => { ... } },
-    showAlert: (msg) => alert(msg)
-  }
-};
-```
-
 ### Основные методы WebApp
 ```javascript
 tg.expand()                              // На весь экран
@@ -130,6 +224,7 @@ tg.HapticFeedback.impactOccurred('light') // Тактильный отклик (
 tg.Clipboard.writeText(text, callback)   // Копирование в буфер
 tg.showAlert(message)                    // Уведомление
 tg.sendData(data)                        // Отправка данных боту
+tg.openInvoice(url, callback)            // Открытие инвойса
 ```
 
 ## Расклады
@@ -156,22 +251,61 @@ tg.sendData(data)                        // Отправка данных бот
    - 1: Суть вопроса (центр)
    - 2-4: Прошлое (ментальный, астральный, физический уровни)
    - 5-7: Будущее (физический, астральный, ментальный уровни)
-6. Общее толкование с учётом позиций
 
 ## Карты
 
 ### Старшие Арканы (22 карты)
 Реализованы все 22 карты (0-21): Шут, Маг, Жрица, ..., Мир.
-Данные в `public/js/cards.js` с полями:
-- `id`, `name`, `name_ru`, `arcana`, `image`
-- `description` (HTML с `<strong>` для выделения)
-- `keywords` (массив)
 
 ### Младшие Арканы (56 карт)
 Генерируются динамически:
 - 4 масти: Жезлы (Огонь), Кубки (Вода), Мечи (Воздух), Пентакли (Земля)
 - 14 рангов: Туз-10, Паж, Рыцарь, Королева, Король
-- Описание формируется из значения ранга + темы масти
+
+## Telegram Stars интеграция
+
+### Поток пользователя
+1. Пользователь делает расклад → нажимает «Поделиться с тарологом»
+2. Экран выбора таролога (3 карточки с фото, рейтингом, ценой)
+3. Выбор таролога → модальное окно подтверждения оплаты
+4. Оплата через Telegram Stars API (в DEV-режиме — имитация)
+5. Успешная оплата → чат с тарологом (25 минут)
+6. Таймер чата → окончание консультации
+7. Экран оценки таролога (1-5 звёзд)
+
+### Распределение платежа
+- **10%** — разработчик (комиссия платформы)
+- **90%** — таролог
+
+### Динамическое ценообразование
+```javascript
+function calculatePrice(sessionsCompleted) {
+  const level = Math.floor(sessionsCompleted / 10) + 1;
+  const price = 33 * Math.pow(1.1, level - 1);
+  return Math.min(Math.round(price), 333); // Максимум 333 ⭐
+}
+```
+
+### API эндпоинты (сервер)
+| Метод | Эндпоинт | Описание |
+|-------|----------|----------|
+| GET | `/api/tarologists` | Список тарологов |
+| POST | `/api/create-invoice` | Создание инвойса |
+| POST | `/api/payment-webhook` | Вебхук оплаты |
+| POST | `/api/rate` | Оценка таролога |
+| GET | `/api/session/:id/messages` | Сообщения сессии |
+| GET | `/api/admin/stats` | Статистика (админ) |
+
+## База данных (SQLite)
+
+### Таблицы
+- `tarologists` — тарологи (имя, фото, рейтинг, telegram_id, баланс)
+- `users` — пользователи (telegram_id, имя)
+- `transactions` — транзакции (сумма, распределение, статус)
+- `chat_sessions` — сессии чата (длительность 25 мин)
+- `messages` — сообщения (текст, медиа, sender_type)
+- `spreads` — расклады (карты, тип)
+- `payouts` — выплаты тарологам
 
 ## Звук
 
@@ -180,8 +314,7 @@ tg.sendData(data)                        // Отправка данных бот
 Особенности:
 - «Разогрев» аудио при первом взаимодействии (для мобильных)
 - Воспроизведение при тасовке колоды
-- Отключение в настройках (шестерёнка на главном экране)
-- Обработка ошибок загрузки
+- Отключение в настройках (шестерёнка)
 
 ## Встряхивание телефона
 
@@ -190,7 +323,6 @@ tg.sendData(data)                        // Отправка данных бот
 - Запрос разрешения на iOS (`DeviceMotionEvent.requestPermission()`)
 - Порог срабатывания: сумма дельт XYZ > 15
 - Таймаут между срабатываниями: 1000 мс
-- Тактильный отклик при успешном срабатывании
 
 ## Частицы и звёзды
 
@@ -198,40 +330,31 @@ tg.sendData(data)                        // Отправка данных бот
 - Canvas на весь экран
 - Количество звёзд: `area / 4000`
 - Мерцание через `sin(phase)`
-- Скорость анимации: 0.01-0.03
 
 ### Частицы при перевороте (`createParticles`)
-- Canvas поверх всех элементов
 - 20 частиц на переворот
 - Цвет: золотой (`hsl(45-60, 80%, 60-80%)`)
 - Физика: гравитация (`vy += 0.1`), затухание (`decay 0.02-0.04`)
-- Время жизни: ~1-2 секунды
 
 ## Деплой
 
 ### GitHub Pages
-CI/CD через `.github/workflows/deploy.yml`:
-- Сборка при пуше в `main`
-- Артефакт: `dist/`
-- Деплой через `actions/deploy-pages@v4`
+```bash
+npm run deploy
+```
 
-### VDS (Nginx)
-Скрипт `deploy.sh`:
-1. `git pull`
-2. `npm install --production`
-3. `npm run build`
-4. Копирование из `dist/`
-5. Перезагрузка Nginx
+### VDS (Nginx + PM2)
+```bash
+# На сервере
+./deploy.sh
 
-Конфигурация Nginx в `/etc/nginx/sites-available/tarot-miniapp`:
-- `root: /var/www/tarot-miniapp`
-- `try_files $uri $uri/ /index.html` (SPA)
-- Кэширование статики (1 год)
-- Gzip сжатие
+# Настройка сервера с ключами
+./setup-server.sh
+```
 
 ## Состояние проекта
 
-### Реализовано (MVP)
+### Реализовано ✅
 - ✅ Главный экран с колодой
 - ✅ Тасовка с таймером (6 сек)
 - ✅ Выбор расклада
@@ -240,37 +363,23 @@ CI/CD через `.github/workflows/deploy.yml`:
 - ✅ Концентрация (7 сек, песочные часы)
 - ✅ Активация встряхиванием
 - ✅ Переворот карт с частицами
-- ✅ Расширение карт по клику (модальное окно)
+- ✅ Расширение карт по клику
 - ✅ Звук тасовки
 - ✅ Настройки (вкл/выкл звук)
-- ✅ Описание расклада (модальное окно)
-- ✅ Telegram WebApp интеграция (тактильный отклик, буфер обмена)
+- ✅ Описание расклада
+- ✅ Telegram WebApp интеграция
 - ✅ Звёздный фон
+- ✅ Экран выбора таролога
+- ✅ Mock оплаты (DEV-режим)
+- ✅ Чат с тарологом
+- ✅ Таймер чата (25 минут)
+- ✅ Экран оценки таролога
+- ✅ Админ-панель
 
-### В разработке / запланировано
-- 🔲 Интеграция платежей Telegram Stars (см. `AGENTS.md`)
-- 🔲 Экран выбора таролога (3 карточки)
-- 🔲 Модальное окно подтверждения оплаты
-- 🔲 Чат с тарологом (25 минут, таймер)
-- 🔲 Экран оценки таролога (1-5 звёзд)
-- 🔲 Динамическое ценообразование (33-333 звёзд)
-- 🔲 Серверная часть (Node.js + Express + WebSocket)
-- 🔲 База данных (tarologists, users, transactions, chat_sessions, messages)
+### В разработке 🔲
 - 🔲 Младшие Арканы (изображения)
-
-## Следующие шаги
-
-Приоритетная задача: **Интеграция платежей Telegram Stars**
-
-Полная спецификация в `AGENTS.md`:
-1. Экран выбора таролога (3 карточки с фото, именем, рейтингом, ценой)
-2. Модальное окно подтверждения оплаты
-3. Создание инвойса через Telegram Stars API
-4. Распределение платежа (10% разработчик, 90% таролог)
-5. Чат на 25 минут с таймером
-6. Экран оценки таролога
-7. Серверная часть (Node.js + Express + SQLite/PostgreSQL)
-8. WebSocket для обмена сообщениями
+- 🔲 Расширенные расклады
+- 🔲 История раскладов
 
 ## Примечания
 
@@ -279,4 +388,18 @@ CI/CD через `.github/workflows/deploy.yml`:
 - **Аппаратное ускорение** — `translateZ(0)`, `will-change`
 - **Оптимизация** — WebP, lazy loading
 - **iOS-совместимость** — обработка `DeviceMotionEvent.requestPermission()`
-- **Мок для локальной разработки** — эмуляция Telegram API
+- **Mock для локальной разработки** — работает БЕЗ ключей Telegram
+
+## Ключевые файлы для разработки
+
+| Файл | Назначение |
+|------|------------|
+| `public/js/main.js` | Точка входа, состояние, навигация, Mock Telegram |
+| `public/js/cards.js` | Данные карт (78 шт) |
+| `public/js/animations.js` | Canvas анимации |
+| `public/js/tarologists.js` | Выбор таролога, Mock оплаты |
+| `public/js/chat.js` | WebSocket чат |
+| `server/server.js` | Express API + WebSocket |
+| `server/db.js` | SQLite модели |
+| `public/css/style.css` | Все стили (2086 строк) |
+| `public/index.html` | Разметка приложения |
