@@ -285,40 +285,42 @@ app.post('/api/create-invoice', async (req, res) => {
 app.post('/api/payment-webhook', async (req, res) => {
   try {
     const update = req.body;
-    
+
     // Логирование входящих данных
     console.log('=== PAYMENT WEBHOOK ===');
     console.log(JSON.stringify(update, null, 2));
 
-    // Проверяем, что это успешная оплата
+    // 1. Pre-checkout query (подтверждение перед оплатой)
     if (update.pre_checkout_query) {
       // Подтверждаем pre-checkout query
       await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/answerPreCheckoutQuery`, {
         pre_checkout_query_id: update.pre_checkout_query.id,
         ok: true
       });
+      console.log(`✅ Pre-checkout подтверждён: ${update.pre_checkout_query.id}`);
       return res.json({ ok: true });
     }
-    
+
+    // 2. Успешная оплата
     if (update.message?.successful_payment) {
       const payment = update.message.successful_payment;
       const transactionId = parseInt(payment.invoice_payload.replace('tarot_session_', ''));
-      
+
       const transaction = Transaction.getById(transactionId);
       if (!transaction) {
         return res.status(404).json({ ok: false, error: 'Transaction not found' });
       }
-      
+
       // Обновляем статус транзакции
       Transaction.updateStatus(transactionId, 'completed', payment.telegram_payment_charge_id);
-      
+
       // Создаём сессию чата
       const chatSession = ChatSession.create({
         userId: transaction.user_id,
         tarologistId: transaction.tarologist_id,
         durationSeconds: 1500 // 25 минут
       });
-      
+
       // Уведомляем таролога
       const tarologist = Tarologist.getById(transaction.tarologist_id);
       if (tarologist?.telegram_id) {
@@ -327,10 +329,59 @@ app.post('/api/payment-webhook', async (req, res) => {
           `🔮 Новая консультация!\n\nКлиент оплатил сессию.\nСессия ID: ${chatSession.id}\nНачните чат в приложении.`
         );
       }
-      
-      console.log(`Платёж успешен. Сессия ${chatSession.id} создана.`);
+
+      console.log(`✅ Платёж успешен. Сессия ${chatSession.id} создана.`);
     }
-    
+
+    // 3. Отмена оплаты (пользователь отменил после pre-checkout)
+    if (update.message?.invoice?.status === 'cancelled') {
+      const invoice = update.message.invoice;
+      const transactionId = parseInt(invoice.payload.replace('tarot_session_', ''));
+
+      const transaction = Transaction.getById(transactionId);
+      if (transaction) {
+        // Обновляем статус на cancelled
+        Transaction.updateStatus(transactionId, 'cancelled');
+        console.log(`❌ Оплата отменена. Транзакция ${transactionId}`);
+      }
+    }
+
+    // 4. Возврат средств (Refund) - через бота админки
+    if (update.message?.text?.startsWith('/refund')) {
+      // Обработка команды возврата через бота
+      const parts = update.message.text.split(' ');
+      const transactionId = parseInt(parts[1]);
+
+      if (transactionId) {
+        const transaction = Transaction.getById(transactionId);
+        if (transaction && transaction.status === 'completed') {
+          // Возврат средств через Telegram API
+          const refundResult = await axios.post(
+            `https://api.telegram.org/bot${BOT_TOKEN}/refundStarPayment`,
+            {
+              user_id: transaction.user_telegram_id,
+              telegram_payment_charge_id: transaction.telegram_payment_id
+            }
+          );
+
+          if (refundResult.data.ok) {
+            // Обновляем статус транзакции
+            Transaction.updateStatus(transactionId, 'refunded');
+
+            // Завершаем сессию если была
+            const session = ChatSession.getActiveByUser(transaction.user_id);
+            if (session) {
+              ChatSession.markCompleted(session.id);
+            }
+
+            console.log(`💰 Возврат средств выполнен. Транзакция ${transactionId}`);
+          } else {
+            console.error('❌ Ошибка возврата:', refundResult.data);
+          }
+        }
+      }
+    }
+
     res.json({ ok: true });
   } catch (error) {
     console.error('Ошибка обработки вебхука:', error);
@@ -513,11 +564,11 @@ app.get('/api/admin/tarologists', isAdmin, (req, res) => {
 app.get('/api/admin/transactions', isAdmin, (req, res) => {
   try {
     const days = parseInt(req.query.days) || 30;
-    
+
     let query;
     if (days === 'all') {
       query = db.prepare(`
-        SELECT 
+        SELECT
           t.*,
           tar.name as tarologist_name
         FROM transactions t
@@ -528,7 +579,7 @@ app.get('/api/admin/transactions', isAdmin, (req, res) => {
       `);
     } else {
       query = db.prepare(`
-        SELECT 
+        SELECT
           t.*,
           tar.name as tarologist_name
         FROM transactions t
@@ -539,14 +590,126 @@ app.get('/api/admin/transactions', isAdmin, (req, res) => {
         LIMIT 100
       `);
     }
-    
-    const transactions = days === 'all' 
+
+    const transactions = days === 'all'
       ? query.all()
       : query.all(days);
-    
+
     res.json(transactions);
   } catch (error) {
     console.error('Ошибка получения транзакций:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/admin/cancel-payment
+ * Отмена оплаты (Refund) через админку
+ */
+app.post('/api/admin/cancel-payment', isAdmin, async (req, res) => {
+  try {
+    const { transactionId, reason } = req.body;
+
+    if (!transactionId) {
+      return res.status(400).json({ success: false, error: 'Transaction ID required' });
+    }
+
+    const transaction = Transaction.getById(transactionId);
+    if (!transaction) {
+      return res.status(404).json({ success: false, error: 'Transaction not found' });
+    }
+
+    if (transaction.status !== 'completed') {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Cannot refund transaction with status: ${transaction.status}` 
+      });
+    }
+
+    // Возврат средств через Telegram API
+    const refundResult = await axios.post(
+      `https://api.telegram.org/bot${BOT_TOKEN}/refundStarPayment`,
+      {
+        user_id: transaction.user_telegram_id,
+        telegram_payment_charge_id: transaction.telegram_payment_id,
+        comment: reason || 'Refund by admin'
+      }
+    );
+
+    if (refundResult.data.ok) {
+      // Обновляем статус транзакции
+      Transaction.updateStatus(transactionId, 'refunded');
+
+      // Завершаем сессию если была
+      const session = ChatSession.getActiveByUser(transaction.user_id);
+      if (session) {
+        ChatSession.markCompleted(session.id);
+      }
+
+      // Уведомляем пользователя
+      if (transaction.user_telegram_id) {
+        sendTelegramMessage(
+          transaction.user_telegram_id,
+          `💰 Возврат средств\n\nОплата за консультацию была отменена.\nСумма: ${transaction.stars_amount} ⭐\nПричина: ${reason || 'Без указания причины'}\n\nСредства будут зачислены в течение нескольких минут.`
+        );
+      }
+
+      console.log(`💰 Возврат выполнен. Транзакция: ${transactionId}, Сумма: ${transaction.stars_amount} ⭐`);
+
+      res.json({ 
+        success: true, 
+        message: 'Refund processed successfully',
+        refundId: refundResult.data.result?.refund_id 
+      });
+    } else {
+      console.error('❌ Ошибка возврата:', refundResult.data);
+      res.status(400).json({ 
+        success: false, 
+        error: refundResult.data.description || 'Refund failed' 
+      });
+    }
+  } catch (error) {
+    console.error('Ошибка отмены оплаты:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Internal server error' 
+    });
+  }
+});
+
+/**
+ * GET /api/admin/transaction/:id
+ * Получить информацию о транзакции
+ */
+app.get('/api/admin/transaction/:id', isAdmin, (req, res) => {
+  try {
+    const transaction = Transaction.getById(req.params.id);
+    
+    if (!transaction) {
+      return res.status(404).json({ success: false, error: 'Transaction not found' });
+    }
+
+    // Получаем сообщения сессии если есть
+    const session = db.prepare(`
+      SELECT * FROM chat_sessions 
+      WHERE user_id = ? AND tarologist_id = ?
+      ORDER BY start_time DESC LIMIT 1
+    `).get(transaction.user_id, transaction.tarologist_id);
+
+    const messages = session 
+      ? Message.getBySession(session.id) 
+      : [];
+
+    res.json({
+      success: true,
+      data: {
+        ...transaction,
+        session,
+        messages_count: messages.length
+      }
+    });
+  } catch (error) {
+    console.error('Ошибка получения транзакции:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

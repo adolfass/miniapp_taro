@@ -193,6 +193,41 @@
       </div>
     </div>
 
+    <!-- Модальное окно: отмена оплаты (Refund) -->
+    <div class="modal" id="refund-modal">
+      <div class="modal-content modal-refund">
+        <h3 class="modal-title">⚠️ Отмена оплаты</h3>
+
+        <div class="refund-info">
+          <p class="refund-transaction-id">Транзакция: <strong id="refund-transaction-id">0</strong></p>
+          <p class="refund-amount">Сумма: <strong id="refund-amount">0 ⭐</strong></p>
+          <p class="refund-user">Пользователь: <strong id="refund-user">—</strong></p>
+        </div>
+
+        <div class="refund-reason">
+          <label for="refund-reason-input">Причина отмены:</label>
+          <textarea 
+            id="refund-reason-input" 
+            placeholder="Укажите причину возврата средств..."
+            rows="4"
+          ></textarea>
+        </div>
+
+        <p class="refund-warning">
+          ⚠️ Средства будут возвращены пользователю через Telegram
+        </p>
+
+        <div class="modal-actions">
+          <button class="action-btn action-btn-secondary" id="cancel-refund-btn">
+            Отмена
+          </button>
+          <button class="action-btn action-btn-danger" id="confirm-refund-btn">
+            💰 Вернуть средства
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Модальное окно: добавление/редактирование таролога -->
     <div class="modal" id="tarologist-edit-modal">
       <div class="modal-content modal-tarologist-edit">

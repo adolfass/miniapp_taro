@@ -214,6 +214,58 @@
   color: var(--text-secondary);
 }
 
+.transaction-actions {
+  display: flex;
+  align-items: center;
+  margin-right: 10px;
+}
+
+.refund-btn {
+  background: rgba(255, 107, 107, 0.2);
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.refund-btn:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.3);
+  border-color: rgba(255, 107, 107, 0.6);
+}
+
+.refund-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.transaction-status {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(212, 175, 55, 0.2);
+  color: var(--gold);
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+.status-completed {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.status-pending {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.status-cancelled,
+.status-refunded {
+  background: rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+}
+
 .transaction-date {
   font-size: 10px;
   color: var(--text-secondary);
@@ -323,7 +375,8 @@
 
 /* Модальные окна */
 .modal-tarologist,
-.modal-confirm {
+.modal-confirm,
+.modal-refund {
   max-width: 360px;
 }
 
@@ -566,4 +619,68 @@
     font-size: 14px;
     padding: 12px 18px;
   }
+}
+
+/* Refund modal styles */
+.refund-info {
+  background: rgba(212, 175, 55, 0.1);
+  padding: 15px;
+  border-radius: 8px;
+  margin: 15px 0;
+}
+
+.refund-info p {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.refund-info strong {
+  color: var(--gold);
+}
+
+.refund-reason {
+  margin: 15px 0;
+}
+
+.refund-reason label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.refund-reason textarea {
+  width: 100%;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.refund-reason textarea:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.refund-warning {
+  color: #ff6b6b;
+  font-size: 13px;
+  margin: 15px 0;
+  padding: 10px;
+  background: rgba(255, 107, 107, 0.1);
+  border-radius: 6px;
+  text-align: center;
+}
+
+.action-btn-danger {
+  background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+}
+
+.action-btn-danger:hover {
+  background: linear-gradient(135deg, #ff5252, #ff3838);
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
 }

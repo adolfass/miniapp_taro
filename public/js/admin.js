@@ -4,6 +4,7 @@
  */
 
 import { initStars } from '/js/animations.js';
+import { initRefund, openRefundModal } from '/js/refund.js';
 
 // ========================================
 // Конфигурация
@@ -47,6 +48,7 @@ const backButtons = {
 const tarologistModal = document.getElementById('tarologist-modal');
 const payoutConfirmModal = document.getElementById('payout-confirm-modal');
 const tarologistEditModal = document.getElementById('tarologist-edit-modal');
+const refundModal = document.getElementById('refund-modal');
 
 // Элементы формы редактирования
 const editModalTitle = document.getElementById('edit-modal-title');
@@ -80,10 +82,13 @@ async function init() {
   
   // Инициализация звёздного фона
   initStars();
-  
+
+  // Инициализация refund модуля
+  initRefund();
+
   // Загрузка данных
   await loadDashboard();
-  
+
   // Навешиваем обработчики
   setupEventListeners();
 }
@@ -228,7 +233,7 @@ function renderTarologistsList() {
 
 function renderTransactionsList() {
   const container = document.getElementById('transactions-list');
-  
+
   if (currentTransactions.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
@@ -238,14 +243,22 @@ function renderTransactionsList() {
     `;
     return;
   }
-  
+
   container.innerHTML = currentTransactions.map(tx => `
-    <div class="transaction-item">
+    <div class="transaction-item" data-id="${tx.id}">
       <div class="transaction-info">
-        <div class="transaction-amount">${formatNumber(tx.amount)} ⭐</div>
+        <div class="transaction-amount">${formatNumber(tx.stars_amount)} ⭐</div>
         <div class="transaction-details">
           ${escapeHtml(tx.tarologist_name)} • Комиссия: ${formatNumber(tx.developer_cut)} ⭐
         </div>
+        <div class="transaction-status status-${tx.status}">
+          ${getStatusBadge(tx.status)}
+        </div>
+      </div>
+      <div class="transaction-actions">
+        <button class="refund-btn" onclick="window.handleRefundClick(${tx.id})" ${tx.status !== 'completed' ? 'disabled' : ''}>
+          ↩️
+        </button>
       </div>
       <div class="transaction-date">${formatDate(tx.created_at)}</div>
     </div>
@@ -623,6 +636,37 @@ function formatDate(dateString) {
     minute: '2-digit'
   });
 }
+
+function getStatusBadge(status) {
+  const badges = {
+    'completed': '✅ Завершено',
+    'pending': '⏳ Ожидает',
+    'cancelled': '❌ Отменено',
+    'refunded': '↩️ Возврат'
+  };
+  return badges[status] || status;
+}
+
+// Глобальная функция для обработки клика refund
+window.handleRefundClick = async function(transactionId) {
+  // Получаем детальную информацию о транзакции
+  try {
+    const response = await fetch(`${API_BASE}/transaction/${transactionId}`, {
+      headers: getAuthHeaders()
+    });
+    const data = await response.json();
+
+    if (data.success) {
+      // Открываем модальное окно refund
+      openRefundModal(data.data);
+    } else {
+      showAlert('Ошибка загрузки информации о транзакции');
+    }
+  } catch (error) {
+    console.error('Ошибка получения транзакции:', error);
+    showAlert('Не удалось загрузить информацию о транзакции');
+  }
+};
 
 function escapeHtml(text) {
   const div = document.createElement('div');
