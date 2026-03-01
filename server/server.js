@@ -290,6 +290,17 @@ app.post('/api/payment-webhook', async (req, res) => {
     console.log('=== PAYMENT WEBHOOK ===');
     console.log(JSON.stringify(update, null, 2));
 
+    // 0. Обработка команд бота (если это сообщение с командой)
+    if (update.message?.text) {
+      const chatId = update.message.chat.id;
+      const [command, ...args] = update.message.text.split(' ');
+      
+      console.log(`📩 Получена команда: ${command} от chat_id: ${chatId}`);
+      
+      // Обрабатываем команды
+      await handleCommand(chatId, command.toLowerCase(), args);
+    }
+
     // 1. Pre-checkout query (подтверждение перед оплатой)
     if (update.pre_checkout_query) {
       // Подтверждаем pre-checkout query
@@ -438,51 +449,136 @@ app.get('/api/session/:id/messages', (req, res) => {
 // ========================================
 
 /**
+ * POST /api/admin/check-auth
+ * Проверка авторизации администратора
+ */
+app.post('/api/admin/check-auth', (req, res) => {
+  try {
+    const telegramInitData = req.headers['x-telegram-init-data'];
+
+    if (!telegramInitData) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Требуется авторизация через Telegram' 
+      });
+    }
+
+    // Валидация данных Telegram
+    const params = new URLSearchParams(telegramInitData);
+    const hash = params.get('hash');
+    params.delete('hash');
+
+    const dataCheckString = Array.from(params.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n');
+
+    const secretKey = crypto.createHmac('sha256', 'WebAppData')
+      .update(BOT_TOKEN)
+      .digest();
+
+    const computedHash = crypto.createHmac('sha256', secretKey)
+      .update(dataCheckString)
+      .digest('hex');
+
+    if (computedHash !== hash) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Неверные данные Telegram' 
+      });
+    }
+
+    // Проверяем, что это админ
+    const userJson = params.get('user');
+    if (!userJson) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Нет данных пользователя' 
+      });
+    }
+
+    const userData = JSON.parse(userJson);
+    const adminId = process.env.ADMIN_TELEGRAM_ID;
+
+    // Если ADMIN_TELEGRAM_ID не установлен - разрешаем первому пользователю
+    if (adminId && userData.id.toString() !== adminId) {
+      console.log(`⚠️ Попытка доступа неавторизованного пользователя: ${userData.id} (${userData.first_name})`);
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Доступ запрещён. Ваш Telegram ID не внесён в список администраторов.' 
+      });
+    }
+
+    // Успешная авторизация
+    console.log(`✅ Админ авторизован: ${userData.id} (${userData.first_name})`);
+    
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: userData.id,
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+          username: userData.username
+        },
+        isAdmin: true
+      }
+    });
+  } catch (error) {
+    console.error('Ошибка авторизации:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Internal server error' 
+    });
+  }
+});
+
+/**
  * Middleware для проверки администратора
  */
 function isAdmin(req, res, next) {
   const telegramInitData = req.headers['x-telegram-init-data'];
-  
+
   if (!telegramInitData) {
     return res.status(401).json({ success: false, error: 'No Telegram data' });
   }
-  
+
   // Валидация данных Telegram
   const params = new URLSearchParams(telegramInitData);
   const hash = params.get('hash');
   params.delete('hash');
-  
+
   const dataCheckString = Array.from(params.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value}`)
     .join('\n');
-  
+
   const secretKey = crypto.createHmac('sha256', 'WebAppData')
     .update(BOT_TOKEN)
     .digest();
-  
+
   const computedHash = crypto.createHmac('sha256', secretKey)
     .update(dataCheckString)
     .digest('hex');
-  
+
   if (computedHash !== hash) {
     return res.status(401).json({ success: false, error: 'Invalid Telegram data' });
   }
-  
+
   // Проверяем, что это админ (по ID из .env или первый пользователь)
   const userJson = params.get('user');
   if (!userJson) {
     return res.status(401).json({ success: false, error: 'No user data' });
   }
-  
+
   const userData = JSON.parse(userJson);
   const adminId = process.env.ADMIN_TELEGRAM_ID;
-  
+
   // Если ADMIN_TELEGRAM_ID не установлен - разрешаем первому пользователю
   if (adminId && userData.id.toString() !== adminId) {
     return res.status(403).json({ success: false, error: 'Access denied' });
   }
-  
+
   req.adminUser = userData;
   next();
 }
