@@ -686,4 +686,5 @@ function showAlert(message) {
 // ========================================
 // Запуск
 // ========================================
-document.addEventListener('DOMContentLoaded', init);
+// Не вызываем init() автоматически — вызывается из admin.html после авторизации
+// document.addEventListener('DOMContentLoaded', init);
