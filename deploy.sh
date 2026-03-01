@@ -62,6 +62,18 @@ echo ""
 echo -e "${YELLOW}📍 Сайт доступен: https://goldtarot.ru${NC}"
 echo ""
 
+# Уведомление Opencode Agent
+echo -e "${BLUE}────────────────────────────────────────────────────────${NC}"
+echo -e "${YELLOW}📬 Opencode Agent: Проверьте инструкции!${NC}"
+echo -e "${BLUE}────────────────────────────────────────────────────────${NC}"
+echo ""
+echo "Путь к инструкциям:"
+echo "  /var/www/tarot-miniapp/exchange/toOpencode.md"
+echo ""
+echo "Для отчёта используйте:"
+echo "  /var/www/tarot-miniapp/exchange/toQwen.md"
+echo ""
+
 # Проверка версии
 echo -e "${YELLOW}Последний коммит:${NC}"
 git log --oneline -1
