@@ -234,4 +234,4 @@ if (process.argv[1]?.endsWith('admin-bot.js')) {
   startBot();
 }
 
-export default { startBot, setupBotWebhook, handleWebhookUpdate };
+export default { startBot, setupBotWebhook, handleWebhookUpdate, handleCommand };

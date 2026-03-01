@@ -21,13 +21,13 @@ echo ""
 
 # 2. Установка зависимостей
 echo -e "${YELLOW}[2/6] Установка зависимостей...${NC}"
-npm install --production
+npm install
 echo -e "${GREEN}✅ Зависимости установлены${NC}"
 echo ""
 
 # 3. Сборка
 echo -e "${YELLOW}[3/6] Сборка проекта...${NC}"
-npm run build
+npx vite build
 echo -e "${GREEN}✅ Проект собран${NC}"
 echo ""
 

@@ -22,7 +22,8 @@ import db, {
   calculatePrice,
   initializeTestData
 } from './db.js';
-import { handleWebhookUpdate } from './admin-bot.js';
+import adminBot from './admin-bot.js';
+const { handleWebhookUpdate, handleCommand } = adminBot;
 
 dotenv.config();
 
@@ -285,6 +286,10 @@ app.post('/api/payment-webhook', async (req, res) => {
   try {
     const update = req.body;
     
+    // Логирование входящих данных
+    console.log('=== PAYMENT WEBHOOK ===');
+    console.log(JSON.stringify(update, null, 2));
+
     // Проверяем, что это успешная оплата
     if (update.pre_checkout_query) {
       // Подтверждаем pre-checkout query
