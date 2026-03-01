@@ -60,7 +60,7 @@ const editPhotoUrl = document.getElementById('edit-photo-url');
 // ========================================
 // Инициализация
 // ========================================
-async function init() {
+export async function init() {
   // Инициализация Telegram WebApp
   const tg = window.Telegram?.WebApp;
   
