@@ -55,7 +55,7 @@ if (import.meta.env.DEV) {
   };
 }
 
-const tg = window.Telegram.WebApp;
+const tg = window.Telegram?.WebApp;
 
 // Экспортируем tg для других модулей
 export { tg };
