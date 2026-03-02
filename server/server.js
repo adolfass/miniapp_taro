@@ -925,6 +925,64 @@ app.get('/api/admin/stats/conversion', isAdmin, (req, res) => {
 });
 
 /**
+ * GET /api/admin/stats/ltv
+ * Lifetime Value — средний доход с пользователя
+ */
+app.get('/api/admin/stats/ltv', isAdmin, (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+
+    // Общее количество уникальных пользователей
+    const totalUsersStmt = db.prepare(`
+      SELECT COUNT(DISTINCT user_id) as count
+      FROM events
+      WHERE event_type = 'app_open'
+    `);
+    const totalUsers = totalUsersStmt.get().count;
+
+    // Общий доход
+    const revenueStmt = db.prepare(`
+      SELECT COALESCE(SUM(stars_amount), 0) as total
+      FROM transactions
+      WHERE status = 'completed'
+        AND created_at >= datetime('now', '-${days} days')
+    `);
+    const totalRevenue = revenueStmt.get().total;
+
+    // Платящие пользователи
+    const payingUsersStmt = db.prepare(`
+      SELECT COUNT(DISTINCT user_id) as count
+      FROM transactions
+      WHERE status = 'completed'
+        AND created_at >= datetime('now', '-${days} days')
+    `);
+    const payingUsers = payingUsersStmt.get().count;
+
+    // LTV = Общий доход / Общее количество пользователей
+    const ltv = totalUsers > 0 ? (totalRevenue / totalUsers).toFixed(2) : 0;
+
+    // ARPPU (Average Revenue Per Paying User) = Доход / Платящие пользователи
+    const arppu = payingUsers > 0 ? (totalRevenue / payingUsers).toFixed(2) : 0;
+
+    res.json({
+      success: true,
+      data: {
+        ltv: parseFloat(ltv),
+        arppu: parseFloat(arppu),
+        total_users: totalUsers,
+        paying_users: payingUsers,
+        total_revenue: totalRevenue,
+        paying_rate: totalUsers > 0 ? ((payingUsers / totalUsers) * 100).toFixed(2) : 0
+      },
+      period: `${days} days`
+    });
+  } catch (error) {
+    console.error('LTV stats error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
  * GET /api/admin/tarologists
  * Получить список тарологов с балансом
  */
@@ -1285,37 +1343,127 @@ app.get('/api/admin/payouts', isAdmin, (req, res) => {
 });
 
 /**
- * POST /api/admin/payouts
- * Создать выплату (отметить как выполненную)
+ * GET /api/admin/payout/:id
+ * Получить выплату по ID
  */
-app.post('/api/admin/payouts', isAdmin, (req, res) => {
+app.get('/api/admin/payout/:id', isAdmin, (req, res) => {
   try {
-    const { tarologist_id, amount } = req.body;
-    
+    const payout = Payout.getById(req.params.id);
+
+    if (!payout) {
+      return res.status(404).json({ success: false, error: 'Payout not found' });
+    }
+
+    res.json({ success: true, data: payout });
+  } catch (error) {
+    console.error('Get payout error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/admin/payout
+ * Создать выплату (pending)
+ */
+app.post('/api/admin/payout', isAdmin, (req, res) => {
+  try {
+    const { tarologist_id, amount, notes } = req.body;
+
     if (!tarologist_id || !amount || amount <= 0) {
       return res.status(400).json({ success: false, error: 'Invalid data' });
     }
-    
+
     // Проверяем баланс таролога
     const balance = Payout.getTarologistBalance(tarologist_id);
     if (balance < amount) {
-      return res.status(400).json({ 
-        success: false, 
-        error: `Недостаточно средств. Баланс: ${balance}` 
+      return res.status(400).json({
+        success: false,
+        error: `Недостаточно средств. Баланс: ${balance}, запрошено: ${amount}`
       });
     }
-    
-    // Создаём выплату
+
+    // Создаём выплату со статусом pending
     const payout = Payout.create({
       tarologistId: tarologist_id,
       amount: amount,
-      status: 'completed',
-      notes: `Выплата от ${req.adminUser.first_name || 'Admin'}`
+      status: 'pending',
+      notes: notes || ''
     });
-    
+
     res.json({ success: true, data: payout });
   } catch (error) {
-    console.error('Ошибка создания выплаты:', error);
+    console.error('Create payout error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * PUT /api/admin/payout/:id/complete
+ * Отметить выплату как выполненную
+ */
+app.put('/api/admin/payout/:id/complete', isAdmin, (req, res) => {
+  try {
+    const payoutId = req.params.id;
+    const { telegram_payment_id } = req.body;
+
+    const payout = Payout.getById(payoutId);
+    if (!payout) {
+      return res.status(404).json({ success: false, error: 'Payout not found' });
+    }
+
+    if (payout.status === 'completed') {
+      return res.status(400).json({ success: false, error: 'Payout already completed' });
+    }
+
+    // Обновляем выплату
+    const stmt = db.prepare(`
+      UPDATE payouts
+      SET status = 'completed',
+          completed_at = CURRENT_TIMESTAMP,
+          telegram_payment_id = ?
+      WHERE id = ?
+    `);
+    stmt.run(telegram_payment_id || null, payoutId);
+
+    const updated = Payout.getById(payoutId);
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Complete payout error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * PUT /api/admin/payout/:id/cancel
+ * Отменить выплату
+ */
+app.put('/api/admin/payout/:id/cancel', isAdmin, (req, res) => {
+  try {
+    const payoutId = req.params.id;
+    const { reason } = req.body;
+
+    const payout = Payout.getById(payoutId);
+    if (!payout) {
+      return res.status(404).json({ success: false, error: 'Payout not found' });
+    }
+
+    if (payout.status === 'completed') {
+      return res.status(400).json({ success: false, error: 'Cannot cancel completed payout' });
+    }
+
+    // Обновляем выплату
+    const stmt = db.prepare(`
+      UPDATE payouts
+      SET status = 'cancelled',
+          notes = ?
+      WHERE id = ?
+    `);
+    stmt.run(reason || payout.notes, payoutId);
+
+    const updated = Payout.getById(payoutId);
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Cancel payout error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
