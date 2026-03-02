@@ -75,7 +75,7 @@ async function handleStart(chatId) {
       inline_keyboard: [[
         {
           text: '🔐 Открыть админ-панель',
-          web_app: { url: `${WEB_APP_URL}/admin.html` }
+          web_app: { url: `${WEB_APP_URL}/admin.html?v=${Date.now()}` }
         }
       ]]
     },
