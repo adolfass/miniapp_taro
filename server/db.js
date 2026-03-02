@@ -113,6 +113,16 @@ db.exec(`
     FOREIGN KEY (tarologist_id) REFERENCES tarologists(id)
   );
 
+  -- Таблица событий (для аналитики)
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    event_data TEXT,  -- JSON: { spread_type: 'daily', amount: 48, ... }
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
   -- Индексы для производительности
   CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
   CREATE INDEX IF NOT EXISTS idx_transactions_tarologist ON transactions(tarologist_id);
@@ -123,6 +133,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_payouts_status ON payouts(status);
   CREATE INDEX IF NOT EXISTS idx_spreads_user ON spreads(user_id);
   CREATE INDEX IF NOT EXISTS idx_spreads_sent ON spreads(is_sent);
+  CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id);
+  CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+  CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
 `);
 
 // ========================================
@@ -570,5 +583,78 @@ export function initializeTestData() {
     console.log('Тестовые данные созданы');
   }
 }
+
+// ========================================
+// Модель Event (для трекинга событий)
+// ========================================
+
+export const Event = {
+  // Создать событие
+  create(data) {
+    const stmt = db.prepare(`
+      INSERT INTO events (user_id, event_type, event_data)
+      VALUES (?, ?, ?)
+    `);
+    const result = stmt.run(
+      data.userId,
+      data.eventType,
+      data.eventData ? JSON.stringify(data.eventData) : null
+    );
+    return this.getById(result.lastInsertRowid);
+  },
+
+  // Получить событие по ID
+  getById(id) {
+    const stmt = db.prepare('SELECT * FROM events WHERE id = ?');
+    return stmt.get(id);
+  },
+
+  // Получить события пользователя
+  getByUser(userId, limit = 100) {
+    const stmt = db.prepare(`
+      SELECT * FROM events
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `);
+    return stmt.all(userId, limit);
+  },
+
+  // Получить события по типу
+  getByType(eventType, limit = 100) {
+    const stmt = db.prepare(`
+      SELECT * FROM events
+      WHERE event_type = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `);
+    return stmt.all(eventType, limit);
+  },
+
+  // Получить статистику по событиям (для аналитики)
+  getStats(eventType, groupBy = 'day', period = 30) {
+    const groupFormats = {
+      'hour': '%Y-%m-%d %H:00',
+      'day': '%Y-%m-%d',
+      'week': '%Y-%W',
+      'month': '%Y-%m'
+    };
+    
+    const format = groupFormats[groupBy] || groupFormats.day;
+    
+    const stmt = db.prepare(`
+      SELECT 
+        strftime('${format}', created_at) as period,
+        COUNT(*) as count
+      FROM events
+      WHERE event_type = ?
+        AND created_at >= datetime('now', '-${period} days')
+      GROUP BY period
+      ORDER BY period ASC
+    `);
+    
+    return stmt.all(eventType);
+  }
+};
 
 export default db;

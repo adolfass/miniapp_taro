@@ -61,6 +61,30 @@ const tg = window.Telegram.WebApp;
 export { tg };
 
 // ========================================
+// Трекинг событий
+// ========================================
+export function trackEvent(eventType, eventData = {}) {
+  fetch('/api/track', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Telegram-Init-Data': tg.initData || ''
+    },
+    body: JSON.stringify({
+      event_type: eventType,
+      event_data: eventData
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    console.log(`📊 Event tracked: ${eventType}`, data);
+  })
+  .catch(err => {
+    console.error(`❌ Track event error: ${eventType}`, err);
+  });
+}
+
+// ========================================
 // Состояние приложения
 // ========================================
 const state = {
@@ -173,10 +197,13 @@ function init() {
   // Инициализация Telegram WebApp
   tg.ready();
   tg.expand();
-  
+
   console.log('Telegram WebApp инициализирован');
   console.log('tg:', tg);
   console.log('tg.HapticFeedback:', tg.HapticFeedback);
+
+  // Трекинг: открытие приложения
+  trackEvent('app_open');
 
   // Инициализация звёздного фона
   initStars();
@@ -352,6 +379,9 @@ function startDailySpread() {
 
   document.getElementById('daily-actions').style.display = 'none';
   switchScreen('daily');
+
+  // Трекинг: выбран ежедневный расклад
+  trackEvent('spread_selected', { spread_type: 'daily', cards_count: 3 });
 }
 
 function revealDailyCard(index) {
@@ -376,6 +406,9 @@ function revealDailyCard(index) {
   // Проверка завершения
   if (state.dailyRevealed.every(r => r)) {
     document.getElementById('daily-actions').style.display = 'flex';
+
+    // Трекинг: расклад завершён
+    trackEvent('cards_flipped', { spread_type: 'daily', cards_count: 3 });
   }
 }
 
@@ -409,6 +442,9 @@ function startSituationSpread() {
   state.currentSpread = 'situation';
   switchScreen('concentration');
   startConcentrationTimer();
+
+  // Трекинг: выбран расклад на ситуацию
+  trackEvent('spread_selected', { spread_type: 'path', cards_count: 7 });
 }
 
 function startConcentrationTimer() {
@@ -500,6 +536,9 @@ function revealSituationCard(index) {
 
   if (state.situationRevealed.every(r => r)) {
     document.getElementById('situation-actions').style.display = 'flex';
+
+    // Трекинг: расклад завершён
+    trackEvent('cards_flipped', { spread_type: 'path', cards_count: 7 });
   }
 }
 

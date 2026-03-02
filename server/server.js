@@ -19,6 +19,7 @@ import db, {
   Message,
   Spread,
   Payout,
+  Event,
   calculatePrice,
   initializeTestData
 } from './db.js';
@@ -440,6 +441,57 @@ app.get('/api/session/:id/messages', (req, res) => {
     res.json({ success: true, data: messages });
   } catch (error) {
     console.error('Ошибка получения сообщений:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ========================================
+// Public API Routes
+// ========================================
+
+/**
+ * POST /api/track
+ * Трекинг событий пользователя (app_open, spread_selected, payment_completed, etc.)
+ */
+app.post('/api/track', async (req, res) => {
+  try {
+    const { event_type, event_data } = req.body;
+    const telegramInitData = req.headers['x-telegram-init-data'];
+
+    if (!telegramInitData) {
+      return res.status(401).json({ success: false, error: 'No Telegram data' });
+    }
+
+    // Получаем user_id из initData
+    const params = new URLSearchParams(telegramInitData);
+    const userJson = params.get('user');
+
+    if (!userJson) {
+      return res.status(400).json({ success: false, error: 'No user data' });
+    }
+
+    const userData = JSON.parse(userJson);
+    const userId = userData.id.toString();
+
+    // Находим или создаём пользователя
+    const user = User.findOrCreate(userId, {
+      username: userData.username,
+      first_name: userData.first_name,
+      last_name: userData.last_name
+    });
+
+    // Создаём событие
+    const event = Event.create({
+      userId: user.id,
+      eventType: event_type,
+      eventData: event_data || {}
+    });
+
+    console.log(`📊 Event tracked: ${event_type} (user: ${userId})`);
+
+    res.json({ success: true, eventId: event.id });
+  } catch (error) {
+    console.error('Track event error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
