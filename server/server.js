@@ -643,7 +643,7 @@ app.get('/api/admin/stats', isAdmin, (req, res) => {
   try {
     // Общий доход (все завершённые транзакции)
     const revenueStmt = db.prepare(`
-      SELECT 
+      SELECT
         COALESCE(SUM(stars_amount), 0) as total,
         COALESCE(SUM(developer_cut), 0) as dev_cut,
         COALESCE(SUM(tarologist_cut), 0) as taro_cut
@@ -651,25 +651,25 @@ app.get('/api/admin/stats', isAdmin, (req, res) => {
       WHERE status = 'completed'
     `);
     const revenue = revenueStmt.get();
-    
+
     // Количество тарологов
     const tarologistsStmt = db.prepare('SELECT COUNT(*) as count FROM tarologists');
     const totalTarologists = tarologistsStmt.get().count;
-    
+
     // Количество консультаций
     const sessionsStmt = db.prepare('SELECT COUNT(*) as count FROM chat_sessions WHERE completed = 1');
     const totalSessions = sessionsStmt.get().count;
-    
+
     // Сумма к выплате (баланс всех тарологов)
     const payoutStmt = db.prepare(`
-      SELECT 
+      SELECT
         COALESCE(SUM(t.tarologist_cut), 0) - COALESCE(SUM(p.amount), 0) as total_payout
       FROM tarologists t
       LEFT JOIN transactions tr ON t.id = tr.tarologist_id AND tr.status = 'completed'
       LEFT JOIN payouts p ON t.id = p.tarologist_id AND p.status = 'completed'
     `);
     const totalPayout = payoutStmt.get().total_payout || 0;
-    
+
     res.json({
       totalRevenue: revenue.total,
       developerCut: revenue.dev_cut,
@@ -680,6 +680,246 @@ app.get('/api/admin/stats', isAdmin, (req, res) => {
     });
   } catch (error) {
     console.error('Ошибка получения статистики:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ========================================
+// Statistics API (DAU, WAU, MAU, Revenue, etc.)
+// ========================================
+
+/**
+ * GET /api/admin/stats/dau
+ * Daily Active Users за N дней
+ */
+app.get('/api/admin/stats/dau', isAdmin, (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+
+    const stmt = db.prepare(`
+      SELECT 
+        strftime('%Y-%m-%d', created_at) as date,
+        COUNT(DISTINCT user_id) as users,
+        COUNT(*) as events
+      FROM events
+      WHERE event_type = 'app_open'
+        AND created_at >= datetime('now', '-${days} days')
+      GROUP BY date
+      ORDER BY date ASC
+    `);
+
+    const data = stmt.all();
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('DAU stats error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/stats/wau
+ * Weekly Active Users за N недель
+ */
+app.get('/api/admin/stats/wau', isAdmin, (req, res) => {
+  try {
+    const weeks = parseInt(req.query.weeks) || 12;
+
+    const stmt = db.prepare(`
+      SELECT 
+        strftime('%Y-%W', created_at) as week,
+        COUNT(DISTINCT user_id) as users,
+        COUNT(*) as events
+      FROM events
+      WHERE event_type = 'app_open'
+        AND created_at >= datetime('now', '-${weeks} weeks')
+      GROUP BY week
+      ORDER BY week ASC
+    `);
+
+    const data = stmt.all();
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('WAU stats error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/stats/mau
+ * Monthly Active Users за N месяцев
+ */
+app.get('/api/admin/stats/mau', isAdmin, (req, res) => {
+  try {
+    const months = parseInt(req.query.months) || 12;
+
+    const stmt = db.prepare(`
+      SELECT 
+        strftime('%Y-%m', created_at) as month,
+        COUNT(DISTINCT user_id) as users,
+        COUNT(*) as events
+      FROM events
+      WHERE event_type = 'app_open'
+        AND created_at >= datetime('now', '-${months} months')
+      GROUP BY month
+      ORDER BY month ASC
+    `);
+
+    const data = stmt.all();
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('MAU stats error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/stats/revenue
+ * Доход по периодам
+ */
+app.get('/api/admin/stats/revenue', isAdmin, (req, res) => {
+  try {
+    const period = req.query.period || 'monthly'; // daily, weekly, monthly
+    const limit = parseInt(req.query.limit) || 12;
+
+    const format = period === 'daily' ? '%Y-%m-%d' : period === 'weekly' ? '%Y-%W' : '%Y-%m';
+    const dateCalc = period === 'daily' ? `${limit} days` : period === 'weekly' ? `${limit} weeks` : `${limit} months`;
+
+    const stmt = db.prepare(`
+      SELECT 
+        strftime('${format}', created_at) as period,
+        COUNT(*) as transactions,
+        SUM(stars_amount) as revenue,
+        SUM(developer_cut) as developer_cut,
+        SUM(tarologist_cut) as tarologist_cut
+      FROM transactions
+      WHERE status = 'completed'
+        AND created_at >= datetime('now', '-${dateCalc}')
+      GROUP BY period
+      ORDER BY period ASC
+    `);
+
+    const data = stmt.all();
+    res.json({ success: true, data, period });
+  } catch (error) {
+    console.error('Revenue stats error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/stats/top-tarologists
+ * Топ тарологов по доходу
+ */
+app.get('/api/admin/stats/top-tarologists', isAdmin, (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 3;
+
+    const stmt = db.prepare(`
+      SELECT 
+        t.id,
+        t.name,
+        t.photo_url,
+        COUNT(tr.id) as consultations,
+        SUM(tr.stars_amount) as total_revenue,
+        SUM(tr.tarologist_cut) as total_earned
+      FROM tarologists t
+      LEFT JOIN transactions tr ON t.id = tr.tarologist_id AND tr.status = 'completed'
+      GROUP BY t.id
+      ORDER BY total_revenue DESC
+      LIMIT ?
+    `);
+
+    const data = stmt.all(limit);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Top tarologists error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/stats/funnel
+ * Воронка: app_open → spread_selected → cards_flipped → payment_completed
+ */
+app.get('/api/admin/stats/funnel', isAdmin, (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+
+    const funnel = {
+      app_open: 0,
+      spread_selected: 0,
+      cards_flipped: 0,
+      payment_completed: 0
+    };
+
+    // Считаем каждое событие
+    Object.keys(funnel).forEach(eventType => {
+      const stmt = db.prepare(`
+        SELECT COUNT(DISTINCT user_id) as count
+        FROM events
+        WHERE event_type = ?
+          AND created_at >= datetime('now', '-${days} days')
+      `);
+      const result = stmt.get(eventType);
+      funnel[eventType] = result ? result.count : 0;
+    });
+
+    // Конверсии
+    const conversion = {
+      app_to_spread: funnel.app_open > 0 ? ((funnel.spread_selected / funnel.app_open) * 100).toFixed(1) : 0,
+      spread_to_flip: funnel.spread_selected > 0 ? ((funnel.cards_flipped / funnel.spread_selected) * 100).toFixed(1) : 0,
+      flip_to_payment: funnel.cards_flipped > 0 ? ((funnel.payment_completed / funnel.cards_flipped) * 100).toFixed(1) : 0,
+      app_to_payment: funnel.app_open > 0 ? ((funnel.payment_completed / funnel.app_open) * 100).toFixed(1) : 0
+    };
+
+    res.json({ success: true, data: { funnel, conversion }, period: `${days} days` });
+  } catch (error) {
+    console.error('Funnel stats error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/stats/conversion
+ * Конверсия в целевое действие
+ */
+app.get('/api/admin/stats/conversion', isAdmin, (req, res) => {
+  try {
+    const target = req.query.target || 'payment_completed';
+    const days = parseInt(req.query.days) || 30;
+
+    // Пользователи открывшие приложение
+    const appOpenStmt = db.prepare(`
+      SELECT COUNT(DISTINCT user_id) as count
+      FROM events
+      WHERE event_type = 'app_open'
+        AND created_at >= datetime('now', '-${days} days')
+    `);
+    const appOpen = appOpenStmt.get().count;
+
+    // Пользователи совершившие целевое действие
+    const targetStmt = db.prepare(`
+      SELECT COUNT(DISTINCT user_id) as count
+      FROM events
+      WHERE event_type = ?
+        AND created_at >= datetime('now', '-${days} days')
+    `);
+    const targetCount = targetStmt.get(target)?.count || 0;
+
+    const conversion = appOpen > 0 ? ((targetCount / appOpen) * 100).toFixed(2) : 0;
+
+    res.json({
+      success: true,
+      data: {
+        target,
+        app_open: appOpen,
+        target_completed: targetCount,
+        conversion_rate: parseFloat(conversion)
+      },
+      period: `${days} days`
+    });
+  } catch (error) {
+    console.error('Conversion stats error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
