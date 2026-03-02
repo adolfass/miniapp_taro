@@ -63,11 +63,11 @@ const editPhotoUrl = document.getElementById('edit-photo-url');
 export async function init() {
   // Инициализация Telegram WebApp
   const tg = window.Telegram?.WebApp;
-  
+
   if (tg) {
     tg.expand();
     tg.ready();
-    
+
     // Получаем ID пользователя
     const user = tg.initDataUnsafe?.user;
     if (user) {
@@ -79,18 +79,21 @@ export async function init() {
       return;
     }
   }
-  
+
   // Инициализация звёздного фона
   initStars();
 
   // Инициализация refund модуля
   initRefund();
 
-  // Загрузка данных
-  await loadDashboard();
-
-  // Навешиваем обработчики
+  // Навешиваем обработчики СРАЗУ (до загрузки данных)
   setupEventListeners();
+  console.log('✅ Event listeners attached');
+
+  // Загрузка данных (после того как кнопки уже работают)
+  loadDashboard().catch(err => {
+    console.error('❌ Dashboard load failed:', err);
+  });
 }
 
 // ========================================
