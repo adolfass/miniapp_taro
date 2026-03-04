@@ -160,8 +160,10 @@
 
 | Файл | Назначение | Кто пишет | Кто читает |
 |------|------------|-----------|------------|
-| `toOpencode_*.md` | Инструкции для Opencode | Qwen Code | Opencode Agent |
+| `toopencode.md` | **ЕДИНСТВЕННЫЙ файл инструкций** | Qwen Code | Opencode Agent |
 | `toQwen.md` | Отчёты для Qwen Code | Opencode Agent | Qwen Code |
+| `PROTOCOL.md` | Протоколы работы | Qwen Code | Оба агента |
+| `RESEARCH.md` | Архитектура проекта | Qwen Code | Оба агента |
 
 ---
 
@@ -178,6 +180,43 @@ Opencode Agent → Сервер (деплой + тесты)
 - ❌ Qwen Code подключается к серверу для деплоя
 - ❌ Opencode Agent пишет код без инструкции
 - ❌ Прямые изменения на сервере без git pull
+
+---
+
+### 2. ЕДИНЫЙ ФАЙЛ ИНСТРУКЦИЙ
+
+**Все инструкции ТОЛЬКО в `toopencode.md`:**
+
+```bash
+# ПРАВИЛЬНО:
+exchange/toopencode.md  ← Единственный файл для инструкций
+
+# НЕПРАВИЛЬНО:
+exchange/toOpencode_adminfix.md  ← ❌ Удалить!
+exchange/toOpencode_paymentfix.md  ← ❌ Удалить!
+exchange/toOpencode_*.md  ← ❌ Удалить!
+```
+
+**Преимущества:**
+- ✅ Один источник истины
+- ✅ Нет путаницы в версиях
+- ✅ Легко найти актуальную инструкцию
+- ✅ Нет старых инструкций которые путают агента
+
+**Перед каждой новой инструкцией:**
+```bash
+# 1. Очистить старые инструкции
+rm /var/www/tarot-miniapp/exchange/toopencode.md
+
+# 2. Создать новый файл
+cat > /tmp/toopencode.md << 'EOF'
+# Новая инструкция
+...
+EOF
+
+# 3. Отправить на сервер
+scp /tmp/toopencode.md root@server:/var/www/tarot-miniapp/exchange/toopencode.md
+```
 
 ---
 
