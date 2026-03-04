@@ -110,7 +110,7 @@ async function loadTarologists() {
   
   try {
     // Для локальной разработки используем мок-данные
-    if (import.meta.env.DEV) {
+    if (import.meta?.env?.DEV) {
       await new Promise(resolve => setTimeout(resolve, 500));
       tarologists = getMockTarologists();
     } else {
@@ -247,7 +247,7 @@ async function confirmPayment() {
 
   try {
     // Для локальной разработки имитируем оплату
-    if (import.meta.env.DEV) {
+    if (import.meta?.env?.DEV) {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       currentTransaction = {

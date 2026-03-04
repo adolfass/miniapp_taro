@@ -156,7 +156,7 @@ function getCurrentSpreadData() {
 // WebSocket подключение
 // ========================================
 function connectWebSocket() {
-  const wsUrl = import.meta.env.DEV
+  const wsUrl = import.meta?.env?.DEV
     ? 'ws://localhost:3001'
     : `wss://${window.location.host}`;
 
@@ -504,7 +504,7 @@ async function submitRating() {
   if (selectedRating < 1) return;
 
   try {
-    if (import.meta.env.DEV) {
+    if (import.meta?.env?.DEV) {
       await new Promise(resolve => setTimeout(resolve, 500));
       console.log(`Оценка отправлена: ${selectedRating}`);
     } else {

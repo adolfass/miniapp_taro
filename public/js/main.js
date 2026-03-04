@@ -14,7 +14,7 @@ import { openTarologistsScreen } from './tarologists.js';
 // ========================================
 // Telegram WebApp Mock для разработки
 // ========================================
-if (import.meta.env.DEV) {
+if (import.meta?.env?.DEV) {
   window.Telegram = {
     WebApp: {
       initData: 'user=test',

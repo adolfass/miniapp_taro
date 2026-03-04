@@ -116,4 +116,3 @@ async function processRefund() {
 }
 
 // Экспорт
-export { openRefundModal, closeRefundModal };
