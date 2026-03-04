@@ -736,6 +736,211 @@ public/
 
 ---
 
-**ДОКУМЕНТ УТВЕРЖДЁН:** 2026-03-02  
-**ВЕРСИЯ:** 1.0  
+## 8. ПРОТОКОЛ СИНХРОНИЗАЦИИ КОДА
+
+**Версия:** 1.0  
+**Дата:** 2026-03-04  
+**Статус:** ✅ УТВЕРЖДЁН
+
+---
+
+### 8.1 НАЗНАЧЕНИЕ
+
+**Протокол синхронизации** — обязательная процедура синхронизации кода между:
+- **MacBook** (локальная разработка Qwen Code)
+- **Git** (GitHub репозиторий)
+- **Сервер** (VDS, Opencode Agent)
+
+**Цель:** Исключить рассинхронизацию после исправления багов.
+
+---
+
+### 8.2 КОГДА ПРИМЕНЯТЬ
+
+**Обязательно после:**
+- ✅ Исправления критических багов
+- ✅ Внесения изменений несколькими агентами
+- ✅ Нарушения протокола (Opencode Agent делал изменения на сервере)
+- ✅ Перед финальным деплоем
+
+---
+
+### 8.3 ПРОЦЕДУРА СИНХРОНИЗАЦИИ
+
+#### **Шаг 1: Сравнение файлов**
+
+**Qwen Code выполняет команды:**
+
+```bash
+# 1. main.js:17 (optional chaining)
+echo "=== main.js:17 ==="
+sed -n '17p' public/js/main.js
+git show HEAD:public/js/main.js | sed -n '17p'
+ssh root@server "sed -n '17p' /var/www/tarot-miniapp/public/js/main.js"
+
+# 2. tarologists.js:6 (getCurrentSpread)
+echo "=== tarologists.js:6 ==="
+sed -n '6p' public/js/tarologists.js
+git show HEAD:public/js/tarologists.js | sed -n '6p'
+ssh root@server "sed -n '6p' /var/www/tarot-miniapp/public/js/tarologists.js"
+
+# 3. admin.js:13 (ADMIN_TELEGRAM_ID)
+echo "=== admin.js:13 ==="
+sed -n '13p' public/js/admin.js
+git show HEAD:public/js/admin.js | sed -n '13p'
+ssh root@server "sed -n '13p' /var/www/tarot-miniapp/public/js/admin.js"
+
+# 4. refund.js (последние 3 строки)
+echo "=== refund.js ==="
+tail -3 public/js/refund.js
+git show HEAD:public/js/refund.js | tail -3
+ssh root@server "tail -3 /var/www/tarot-miniapp/public/js/refund.js"
+
+# 5. admin.js:28-40 (DOM переменные)
+echo "=== admin.js:28-40 ==="
+sed -n '28,40p' public/js/admin.js
+git show HEAD:public/js/admin.js | sed -n '28,40p'
+ssh root@server "sed -n '28,40p' /var/www/tarot-miniapp/public/js/admin.js"
+```
+
+---
+
+#### **Шаг 2: Выявление расхождений**
+
+**Сравнить вывод:**
+
+| Результат | Действие |
+|-----------|----------|
+| ✅ Все 3 версии идентичны | Перейти к Шагу 4 |
+| ❌ Есть расхождения | Перейти к Шагу 3 |
+
+---
+
+#### **Шаг 3: Синхронизация**
+
+**Если сервер имеет правильную версию:**
+
+```bash
+# 1. Скачать файл с сервера
+ssh root@server "cat /var/www/tarot-miniapp/public/js/admin.js" > /tmp/server_admin.js
+
+# 2. Копировать на MacBook
+cp /tmp/server_admin.js public/js/admin.js
+
+# 3. Проверить
+diff /tmp/server_admin.js public/js/admin.js
+# Должно быть пусто (нет различий)
+```
+
+**Если MacBook имеет правильную версию:**
+
+```bash
+# 1. Исправить файл на MacBook
+# 2. Закоммитить и запушить
+git add -A
+git commit -m "fix: синхронизация с сервером"
+git push origin main
+
+# 3. Opencode Agent делает git pull
+```
+
+---
+
+#### **Шаг 4: Финальная проверка**
+
+**Qwen Code выполняет:**
+
+```bash
+echo "=== ФИНАЛЬНАЯ ПРОВЕРКА ==="
+
+# main.js:17
+ssh root@server "sed -n '17p' /var/www/tarot-miniapp/public/js/main.js"
+git show HEAD:public/js/main.js | sed -n '17p'
+
+# tarologists.js:6
+ssh root@server "sed -n '6p' /var/www/tarot-miniapp/public/js/tarologists.js"
+git show HEAD:public/js/tarologists.js | sed -n '6p'
+
+# admin.js:13
+ssh root@server "sed -n '13p' /var/www/tarot-miniapp/public/js/admin.js"
+git show HEAD:public/js/admin.js | sed -n '13p'
+
+# refund.js
+ssh root@server "tail -3 /var/www/tarot-miniapp/public/js/refund.js"
+git show HEAD:public/js/refund.js | tail -3
+
+echo "✅ ВСЕ ФАЙЛЫ СИНХРОНИЗИРОВАНЫ!"
+```
+
+---
+
+#### **Шаг 5: Коммит и пуш**
+
+**Если были изменения:**
+
+```bash
+git add -A
+git commit -m "fix: синхронизация кода (MacBook ↔ Git ↔ Сервер)
+
+🔄 SYNC: Протокол синхронизации v1.0
+
+Синхронизированы файлы:
+- main.js: optional chaining ✅
+- tarologists.js: getCurrentSpread ✅
+- admin.js: let переменные ✅
+- refund.js: без дубликатов ✅
+
+Статус: ✅ Полностью синхронизировано"
+git push origin main
+```
+
+---
+
+### 8.4 ЧЕК-ЛИСТ СИНХРОНИЗАЦИИ
+
+**Перед деплоем проверить:**
+
+```
+□ main.js:17 — import.meta?.env?.DEV
+□ tarologists.js:6 — getCurrentSpread
+□ admin.js:13 — let ADMIN_TELEGRAM_ID
+□ admin.js:28-40 — let screens = null (без дубля)
+□ refund.js:118 — без дубликата экспорта
+□ Все 3 версии идентичны (MacBook, Git, Сервер)
+```
+
+---
+
+### 8.5 ТАБЛИЦА СИНХРОНИЗАЦИИ
+
+| Файл | Критическая строка | Правильное значение |
+|------|-------------------|---------------------|
+| main.js | 17 | `if (import.meta?.env?.DEV) {` |
+| tarologists.js | 6 | `import { ..., getCurrentSpread, ... }` |
+| admin.js | 13 | `let ADMIN_TELEGRAM_ID = null;` |
+| admin.js | 28-40 | `let screens = null;` (без `const`) |
+| refund.js | 118 | `// Экспорт` (без дубликата) |
+
+---
+
+### 8.6 НАРУШЕНИЯ ПРОТОКОЛА
+
+**Если Opencode Agent делал изменения на сервере:**
+
+1. ✅ **Скачать файл с сервера**
+2. ✅ **Сравнить с Git и MacBook**
+3. ✅ **Выбрать правильную версию**
+4. ✅ **Синхронизировать все 3 версии**
+5. ✅ **Закоммитить и запушить**
+
+---
+
+**Протокол вступает в силу:** 2026-03-04  
+**Версия:** 1.0  
+**Статус:** ✅ ОБЯЗАТЕЛЕН К ПРИМЕНЕНИЮ
+
+---
+
+**ДОКУМЕНТ УТВЕРЖДЁН:** 2026-03-04
+**ВЕРСИЯ:** 1.0 (с Протоколом синхронизации)
 **СТАТУС:** ✅ ДЕЙСТВУЮЩИЙ
