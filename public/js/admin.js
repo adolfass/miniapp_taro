@@ -10,7 +10,7 @@ import { initRefund, openRefundModal } from '/js/refund.js';
 // Конфигурация
 // ========================================
 const API_BASE = '/api/admin';
-const ADMIN_TELEGRAM_ID = null; // Будет установлен из Telegram WebApp
+let ADMIN_TELEGRAM_ID = null; // Будет установлен из Telegram WebApp
 
 // ========================================
 // Состояние
@@ -32,23 +32,14 @@ const screens = {
   payouts: document.getElementById('screen-payouts')
 };
 
-const navButtons = {
-  tarologists: document.getElementById('tarologists-btn'),
-  transactions: document.getElementById('transactions-btn'),
-  showPayouts: document.getElementById('show-payouts-btn')
-};
-
-const backButtons = {
-  tarologists: document.getElementById('back-to-dashboard-tarologists'),
-  transactions: document.getElementById('back-to-dashboard-transactions'),
-  payouts: document.getElementById('back-to-dashboard-payouts')
-};
-
-// Модальные окна
-const tarologistModal = document.getElementById('tarologist-modal');
-const payoutConfirmModal = document.getElementById('payout-confirm-modal');
-const tarologistEditModal = document.getElementById('tarologist-edit-modal');
-const refundModal = document.getElementById('refund-modal');
+// DOM переменные (будут инициализированы в init())
+let screens = null;
+let navButtons = null;
+let backButtons = null;
+let tarologistModal = null;
+let payoutConfirmModal = null;
+let tarologistEditModal = null;
+let refundModal = null;
 
 // Элементы формы редактирования
 const editModalTitle = document.getElementById('edit-modal-title');
@@ -85,6 +76,24 @@ export async function init() {
 
   // Инициализация refund модуля
   initRefund();
+
+  // Инициализация DOM-переменных (ПОСЛЕ загрузки Telegram)
+  navButtons = {
+    tarologists: document.getElementById('tarologists-btn'),
+    transactions: document.getElementById('transactions-btn'),
+    showPayouts: document.getElementById('show-payouts-btn')
+  };
+
+  backButtons = {
+    tarologists: document.getElementById('back-to-dashboard-tarologists'),
+    transactions: document.getElementById('back-to-dashboard-transactions'),
+    payouts: document.getElementById('back-to-dashboard-payouts')
+  };
+
+  tarologistModal = document.getElementById('tarologist-modal');
+  payoutConfirmModal = document.getElementById('payout-confirm-modal');
+  tarologistEditModal = document.getElementById('tarologist-edit-modal');
+  refundModal = document.getElementById('refund-modal');
 
   // Навешиваем обработчики СРАЗУ (до загрузки данных)
   setupEventListeners();

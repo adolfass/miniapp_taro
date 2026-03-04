@@ -124,7 +124,7 @@ export const getCurrentResult = () => {
 };
 
 // Экспортируем currentSpread для других модулей
-export const currentSpread = state.currentSpread;
+export const getCurrentSpread = () => state.currentSpread;
 
 // Сохраняем состояние в window для доступа из chat.js
 window.tarotState = state;

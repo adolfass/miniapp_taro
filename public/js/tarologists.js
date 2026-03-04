@@ -3,7 +3,7 @@
  * Экран выбора таролога и оплата консультации
  */
 
-import { switchScreen, tg, currentSpread, getCurrentResult, timerInterval } from './main.js';
+import { switchScreen, tg, getCurrentSpread, getCurrentResult, timerInterval } from './main.js';
 
 // ========================================
 // Состояние
@@ -43,6 +43,7 @@ function setupEventListeners() {
   
   // Назад к раскладам
   backToSpreadsTarologists?.addEventListener('click', () => {
+    const currentSpread = getCurrentSpread();
     if (currentSpread === 'daily') {
       switchScreen('daily');
     } else {
