@@ -197,7 +197,70 @@ Opencode Agent → Сервер (деплой + тесты)
 
 ---
 
-### 2. ЕДИНЫЙ ФАЙЛ ИНСТРУКЦИЙ
+### 2. 🚨 КРИТИЧНО: Qwen Code НЕ заходит на сервер!
+
+**Qwen Code работает ТОЛЬКО локально (MacBook):**
+
+```
+Qwen Code:
+✅ Пишет код на MacBook
+✅ Коммитит и пушит на GitHub
+✅ Создаёт инструкции в exchange/toopencode.md
+✅ Читает отчёты из exchange/toQwen.md
+❌ НЕ подключается к серверу по SSH
+❌ НЕ изменяет файлы на сервере напрямую
+❌ НЕ удаляет файлы на сервере
+```
+
+**Opencode Agent работает ТОЛЬКО на сервере:**
+
+```
+Opencode Agent:
+✅ Загружает код с GitHub (git pull)
+✅ Деплоит и перезапускает сервисы
+✅ Тестирует функционал на сервере
+✅ Пишет отчёты в exchange/toQwen.md
+✅ Читает инструкции из exchange/toopencode.md
+❌ НЕ пишет код самостоятельно
+❌ НЕ удаляет файлы без инструкции
+❌ НЕ делает git reset без инструкции
+```
+
+---
+
+### 3. РАБОЧИЙ ПРОЦЕСС
+
+**Правильный flow:**
+
+```
+1. Qwen Code (MacBook):
+   - Пишет код
+   - git add -A
+   - git commit -m "..."
+   - git push origin main
+
+2. Qwen Code:
+   - Создаёт инструкцию /tmp/toopencode.md
+   - scp /tmp/toopencode.md root@server:/var/www/tarot-miniapp/exchange/toopencode.md
+
+3. Opencode Agent (сервер):
+   - Читает инструкцию из exchange/toopencode.md
+   - cd /var/www/tarot-miniapp
+   - git pull origin main
+   - npm run build
+   - pm2 restart tarot-server
+   - Тестирует
+   - Пишет отчёт в exchange/toQwen.md
+
+4. Qwen Code (MacBook):
+   - Читает отчёт из exchange/toQwen.md
+   - Анализирует
+   - Пишет новую инструкцию (если нужно)
+```
+
+---
+
+### 4. ЕДИНЫЙ ФАЙЛ ИНСТРУКЦИЙ
 
 **Все инструкции ТОЛЬКО в `toopencode.md`:**
 
