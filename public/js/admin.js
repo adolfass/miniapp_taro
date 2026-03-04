@@ -25,15 +25,14 @@ let selectedPayoutId = null;
 // ========================================
 // DOM Элементы
 // ========================================
-const screens = {
-  dashboard: document.getElementById('screen-dashboard'),
-  tarologists: document.getElementById('screen-tarologists-list'),
-  transactions: document.getElementById('screen-transactions'),
-  payouts: document.getElementById('screen-payouts')
-};
-
 // DOM переменные (будут инициализированы в init())
 let screens = null;
+let navButtons = null;
+let backButtons = null;
+let tarologistModal = null;
+let payoutConfirmModal = null;
+let tarologistEditModal = null;
+let refundModal = null;
 
 // Элементы формы редактирования
 let editModalTitle = null;
@@ -96,7 +95,6 @@ export async function init() {
   tarologistEditModal = document.getElementById('tarologist-edit-modal');
   refundModal = document.getElementById('refund-modal');
 
-  // Инициализация элементов формы редактирования
   editModalTitle = document.getElementById('edit-modal-title');
   editTelegramId = document.getElementById('edit-telegram-id');
   editName = document.getElementById('edit-name');
