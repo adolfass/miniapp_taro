@@ -34,19 +34,13 @@ const screens = {
 
 // DOM переменные (будут инициализированы в init())
 let screens = null;
-let navButtons = null;
-let backButtons = null;
-let tarologistModal = null;
-let payoutConfirmModal = null;
-let tarologistEditModal = null;
-let refundModal = null;
 
 // Элементы формы редактирования
-const editModalTitle = document.getElementById('edit-modal-title');
-const editTelegramId = document.getElementById('edit-telegram-id');
-const editName = document.getElementById('edit-name');
-const editDescription = document.getElementById('edit-description');
-const editPhotoUrl = document.getElementById('edit-photo-url');
+let editModalTitle = null;
+let editTelegramId = null;
+let editName = null;
+let editDescription = null;
+let editPhotoUrl = null;
 
 // ========================================
 // Инициализация
@@ -78,6 +72,13 @@ export async function init() {
   initRefund();
 
   // Инициализация DOM-переменных (ПОСЛЕ загрузки Telegram)
+  screens = {
+    dashboard: document.getElementById('screen-dashboard'),
+    tarologists: document.getElementById('screen-tarologists-list'),
+    transactions: document.getElementById('screen-transactions'),
+    payouts: document.getElementById('screen-payouts')
+  };
+
   navButtons = {
     tarologists: document.getElementById('tarologists-btn'),
     transactions: document.getElementById('transactions-btn'),
@@ -94,6 +95,13 @@ export async function init() {
   payoutConfirmModal = document.getElementById('payout-confirm-modal');
   tarologistEditModal = document.getElementById('tarologist-edit-modal');
   refundModal = document.getElementById('refund-modal');
+
+  // Инициализация элементов формы редактирования
+  editModalTitle = document.getElementById('edit-modal-title');
+  editTelegramId = document.getElementById('edit-telegram-id');
+  editName = document.getElementById('edit-name');
+  editDescription = document.getElementById('edit-description');
+  editPhotoUrl = document.getElementById('edit-photo-url');
 
   // Навешиваем обработчики СРАЗУ (до загрузки данных)
   setupEventListeners();
