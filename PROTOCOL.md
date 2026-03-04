@@ -158,12 +158,26 @@
 
 ### `/var/www/tarot-miniapp/exchange/`
 
+**ТОЛЬКО 2 ФАЙЛА:**
+
 | Файл | Назначение | Кто пишет | Кто читает |
 |------|------------|-----------|------------|
-| `toopencode.md` | **ЕДИНСТВЕННЫЙ файл инструкций** | Qwen Code | Opencode Agent |
-| `toQwen.md` | Отчёты для Qwen Code | Opencode Agent | Qwen Code |
-| `PROTOCOL.md` | Протоколы работы | Qwen Code | Оба агента |
-| `RESEARCH.md` | Архитектура проекта | Qwen Code | Оба агента |
+| `toopencode.md` | Инструкции | Qwen Code | Opencode Agent |
+| `toQwen.md` | Отчёты | Opencode Agent | Qwen Code |
+
+**ЗАПРЕЩЕНО:**
+- ❌ Создавать другие файлы в exchange/
+- ❌ Использовать `toOpencode_*.md`
+- ❌ Использовать `toQwen_*.md`
+- ❌ Хранить PROTOCOL.md в exchange/
+- ❌ Хранить RESEARCH.md в exchange/
+
+**ПРАВИЛЬНО:**
+```
+exchange/
+├── toopencode.md    # ← ЕДИНСТВЕННАЯ инструкция
+└── toQwen.md        # ← ЕДИНСТВЕННЫЙ отчёт
+```
 
 ---
 
@@ -220,19 +234,18 @@ scp /tmp/toopencode.md root@server:/var/www/tarot-miniapp/exchange/toopencode.md
 
 ---
 
-### 2. Инструкции через exchange/
+### 3. ЕДИНЫЙ ФАЙЛ ОТЧЁТОВ
 
-**Все инструкции только через:**
+**Все отчёты ТОЛЬКО в `toQwen.md`:**
+
+```bash
+# ПРАВИЛЬНО:
+exchange/toQwen.md  ← Единственный файл для отчётов
+
+# НЕПРАВИЛЬНО:
+exchange/toQwen_report.md  ← ❌ Удалить!
+exchange/toQwen_*.md  ← ❌ Удалить!
 ```
-/var/www/tarot-miniapp/exchange/toOpencode_*.md
-```
-
-**Запрещено:**
-- ❌ Устные инструкции
-- ❌ Инструкции вне exchange/
-- ❌ Изменение кода без письменной инструкции
-
----
 
 ### 3. Отчёты в toQwen.md
 
