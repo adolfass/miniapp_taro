@@ -3,13 +3,13 @@
  * Точка входа приложения, инициализация Telegram WebApp
  */
 
-import { initStars, createParticles } from './animations.js';
-import { playShuffleSound, warmupAudio } from './sound.js';
-import { initShake, stopShake } from './shake.js';
+import { initStars, createParticles } from '../core/animations.js';
+import { playShuffleSound, warmupAudio } from '../core/sound.js';
+import { initShake, stopShake } from '../core/shake.js';
 import { getRandomCards } from './cards.js';
 import { getDailyPosition, formatDailySpreadText } from './spreads.js';
-import { getDescriptionHTML } from './description.js';
-import { openTarologistsScreen } from './tarologists.js';
+import { getDescriptionHTML } from '../core/description.js';
+import { openTarologistsScreen } from '../modules/tarologists/tarologists.js';
 
 // ========================================
 // Telegram WebApp Mock для разработки

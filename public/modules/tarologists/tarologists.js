@@ -3,7 +3,7 @@
  * Экран выбора таролога и оплата консультации
  */
 
-import { switchScreen, tg, getCurrentSpread, getCurrentResult, timerInterval } from './main.js';
+import { switchScreen, tg, getCurrentSpread, getCurrentResult, timerInterval } from '../../main-app/main.js';
 
 // ========================================
 // Состояние
@@ -329,7 +329,7 @@ function startChatSession() {
   switchScreen('chat');
   
   // Инициализируем чат
-  const chatModule = import('./chat.js');
+  const chatModule = import('../chat/chat.js');
   chatModule.then(module => {
     module.initChat(selectedTarologist, currentTransaction.id);
   });

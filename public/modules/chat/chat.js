@@ -3,7 +3,7 @@
  * Чат с тарологом с таймером, WebSocket и поддержкой медиа
  */
 
-import { switchScreen, tg, getCurrentResult } from './main.js';
+import { switchScreen, tg, getCurrentResult } from '../../main-app/main.js';
 
 // ========================================
 // Состояние

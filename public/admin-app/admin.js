@@ -3,8 +3,8 @@
  * Админ-панель для управления выплатами и статистикой
  */
 
-import { initStars } from '/js/animations.js';
-import { initRefund, openRefundModal } from '/js/refund.js';
+import { initStars } from '../core/animations.js';
+import { initRefund, openRefundModal } from './refund.js';
 
 // ========================================
 // Конфигурация
