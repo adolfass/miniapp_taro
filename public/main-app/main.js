@@ -609,6 +609,20 @@ function createCardElement(card, index, type, positionName = '') {
     <div class="card-inner">
       <div class="card-face card-front"></div>
       <div class="card-face card-back-face">
+        <!-- 
+          🎴 КАРТОЧКИ КАРТ:
+          Путь к изображениям: assets/card-faces/major/{id}-{name}.webp
+          
+          ⏳ ВРЕМЕННО: Файлы карт не загружены (MVP версия)
+          - Старшие Арканы (0-21): частично загружены
+          - Младшие Арканы (22-77): НЕ загружены
+          
+          🔜 TODO: Загрузить все 78 карт в папку assets/card-faces/major/
+          Формат именования: {id}-{name}.webp (например: 00-fool.webp, 1-magician.webp)
+          
+          Пока карты отображаются без изображений — показывается только описание.
+          Это НЕ критично для MVP, функционал работает корректно.
+        -->
         <img src="assets/card-faces/major/${card.id.toString().padStart(2, '0')}-${card.name.toLowerCase().replace(/\s+/g, '-')}.webp" alt="${card.name_ru}" onerror="this.style.display='none'">
       </div>
     </div>
