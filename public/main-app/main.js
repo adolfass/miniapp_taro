@@ -348,10 +348,14 @@ function handleDeckClick() {
         // Используем impactOccurred с 'medium' для средней вибрации
         tg.HapticFeedback.impactOccurred('medium');
         console.log('Вибрация отправлена (medium impact)');
+        
+        // Дополнительная вибрация успеха
+        tg.HapticFeedback.notificationOccurred('success');
+        console.log('✅ Вибрация успеха отправлена');
       } else {
         console.log('HapticFeedback недоступен');
       }
-      
+
       // Переходим к выбору расклада
       deckContainer.classList.remove('shuffling');
       isShuffling = false;

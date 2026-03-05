@@ -89,14 +89,14 @@ export async function openTarologistsScreen() {
       'Вы открыли приложение в браузере, а не в Telegram.\n\n' +
       'Для полноценной работы (оплата, чат с тарологом) откройте приложение в Telegram:\n\n' +
       '1. Откройте Telegram на ПК или телефоне\n' +
-      '2. Найдите бота @YourBotName\n' +
+      '2. Найдите бота @goldentarot_bot\n' +
       '3. Нажмите "Запустить Mini App"\n\n' +
       'Нажмите OK чтобы продолжить в демо-режиме или Отмена для закрытия.'
     );
-    
+
     if (!confirmed) {
       // Попытка открыть Telegram
-      window.open('https://t.me/YourBotName', '_blank');
+      window.open('https://t.me/goldentarot_bot', '_blank');
       return;
     }
   }
@@ -300,15 +300,21 @@ async function confirmPayment() {
     };
 
     // Открываем инвойс Telegram
-    tg.openInvoice(data.data.invoiceLink, async (status) => {
-      if (status === 'paid') {
-        showPaymentSuccess();
-      } else if (status === 'cancelled' || status === 'failed') {
-        tg.showAlert('Оплата не была завершена. Попробуйте снова.');
-      }
-    });
-
-    closePaymentModal();
+    if (tg.openInvoice) {
+      tg.openInvoice(data.data.invoiceLink, async (status) => {
+        if (status === 'paid') {
+          console.log('✅ Оплата успешна');
+          closePaymentModal();
+          showPaymentSuccess();
+        } else if (status === 'cancelled' || status === 'failed') {
+          console.log('❌ Оплата отменена');
+          alert('Оплата не была завершена. Попробуйте снова.');
+        }
+      });
+    } else {
+      console.error('❌ tg.openInvoice не доступен');
+      alert('Оплата недоступна в этой версии Telegram.');
+    }
   } catch (error) {
     console.error('Ошибка оплаты:', error);
     tg.showAlert('Произошла ошибка при оплате. Попробуйте позже.');

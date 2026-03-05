@@ -101,6 +101,20 @@ export async function init() {
   editDescription = document.getElementById('edit-description');
   editPhotoUrl = document.getElementById('edit-photo-url');
 
+  // Валидация Telegram ID - только цифры
+  if (editTelegramId) {
+    editTelegramId.addEventListener('input', (e) => {
+      // Только цифры
+      e.target.value = e.target.value.replace(/\D/g, '');
+    });
+
+    editTelegramId.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pasted = e.clipboardData.getData('text');
+      editTelegramId.value = pasted.replace(/\D/g, '');
+    });
+  }
+
   // Навешиваем обработчики СРАЗУ (до загрузки данных)
   setupEventListeners();
   console.log('✅ Event listeners attached');
