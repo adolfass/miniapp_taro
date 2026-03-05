@@ -182,6 +182,20 @@ export const Tarologist = {
     };
   },
 
+  // Получить таролога по Telegram ID
+  getByTelegramId(telegramId) {
+    const stmt = db.prepare('SELECT * FROM tarologists WHERE telegram_id = ?');
+    const tarologist = stmt.get(telegramId);
+    
+    if (!tarologist) return null;
+    
+    return {
+      ...tarologist,
+      level: Math.floor(tarologist.sessions_completed / 10) + 1,
+      price: calculatePrice(tarologist.sessions_completed)
+    };
+  },
+
   // Обновить рейтинг
   updateRating(id, rating) {
     const stmt = db.prepare(`

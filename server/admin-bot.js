@@ -5,12 +5,15 @@
 
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { Tarologist, Payout } from './db.js';
 
 dotenv.config();
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID;
 const WEB_APP_URL = process.env.WEB_APP_URL || 'https://your-domain.com';
+
+console.log('🔍 BOT: Token loaded:', BOT_TOKEN ? 'Yes (length: ' + BOT_TOKEN.length + ')' : 'No');
 
 if (!BOT_TOKEN) {
   console.error('❌ TELEGRAM_BOT_TOKEN не установлен в .env');
@@ -69,15 +72,19 @@ async function handleStart(chatId) {
 
 **Статус сервера:** ✅ Работает`;
 
-  // Кнопка для открытия админки
+  // Кнопки для открытия админки и регистрации тарологов
   const keyboard = {
     reply_markup: {
-      inline_keyboard: [[
-        {
+      inline_keyboard: [
+        [{
           text: '🔐 Открыть админ-панель',
           web_app: { url: `${WEB_APP_URL}/admin.html?v=${Date.now()}` }
-        }
-      ]]
+        }],
+        [{
+          text: '💰 Для тарологов',
+          callback_data: 'tarologist_info'
+        }]
+      ]
     },
     parse_mode: 'Markdown'
   };
@@ -146,9 +153,13 @@ async function getUpdates() {
     timeout: 30
   };
 
+  console.log('🔍 BOT: Requesting updates from Telegram...');
   const result = await callTelegram('getUpdates', data);
   
+  console.log('🔍 BOT: Got result:', result ? 'ok=' + result.ok + ', count=' + (result.result?.length || 0) : 'null');
+  
   if (result && result.ok && Array.isArray(result.result)) {
+    console.log('🔍 BOT: Processing', result.result.length, 'updates');
     for (const update of result.result) {
       lastUpdateId = update.update_id;
       
@@ -164,9 +175,10 @@ async function getUpdates() {
         }
       }
       
-      // Обрабатываем callback query (если нужно)
+      // Обрабатываем callback query
       if (update.callback_query) {
-        // Пока ничего не делаем
+        console.log('🔍 BOT: Received callback_query:', update.callback_query.data);
+        await handleCallbackQuery(update.callback_query);
       }
     }
   }
@@ -192,6 +204,61 @@ export async function setupBotWebhook(webhookUrl) {
 }
 
 // ========================================
+// Обработка кнопок (callback_query)
+// ========================================
+async function handleCallbackQuery(query) {
+  const chatId = query.message.chat.id;
+  const userId = query.from.id;
+  const data = query.data;
+
+  console.log('🔍 BOT: Processing callback_query:', data, 'for user:', userId);
+
+  if (data === 'tarologist_info') {
+    // Проверяем, является ли пользователь тарологом
+    const tarologist = Tarologist.getByTelegramId(userId.toString());
+
+    if (tarologist) {
+      // Показываем профиль существующего таролога
+      const balance = Payout.getTarologistBalance(tarologist.id);
+      const profileText = `💼 Ваш профиль таролога
+
+Имя: ${tarologist.name}
+Telegram ID: ${userId}
+Баланс: ${balance} ⭐
+
+Для вывода средств свяжитесь с администратором.`;
+
+      await callTelegram('sendMessage', {
+        chat_id: chatId,
+        text: profileText
+      });
+    } else {
+      // Показываем инструкцию для новых тарологов
+      const registrationText = `💼 Регистрация таролога
+
+Ваш Telegram ID: ${userId}
+
+Чтобы стать тарологом:
+1. Скопируйте этот ID
+2. Отправьте администратору
+3. После регистрации вы сможете получать консультации
+
+💡 Совет: Если вы таролог и хотите участвовать - напишите администратору`;
+
+      await callTelegram('sendMessage', {
+        chat_id: chatId,
+        text: registrationText
+      });
+    }
+  }
+
+  // Отвечаем на callback_query чтобы убрать "часики"
+  await callTelegram('answerCallbackQuery', {
+    callback_query_id: query.id
+  });
+}
+
+// ========================================
 // Обработчик webhook
 // ========================================
 export function handleWebhookUpdate(update) {
@@ -203,6 +270,10 @@ export function handleWebhookUpdate(update) {
       const [command, ...args] = text.split(' ');
       handleCommand(chatId, command.toLowerCase(), args);
     }
+  }
+  
+  if (update.callback_query) {
+    handleCallbackQuery(update.callback_query);
   }
   
   return { ok: true };
