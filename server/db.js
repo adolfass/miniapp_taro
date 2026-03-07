@@ -57,6 +57,9 @@ db.exec(`
     FOREIGN KEY (tarologist_id) REFERENCES tarologists(id)
   );
 
+  -- Индекс для проверки идемпотентности (защита от двойной оплаты)
+  CREATE INDEX IF NOT EXISTS idx_transactions_telegram_payment_id ON transactions(telegram_payment_id);
+
   -- Таблица сессий чата
   CREATE TABLE IF NOT EXISTS chat_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -289,9 +292,23 @@ export const Transaction = {
     return stmt.get(id);
   },
 
+  // ПРОВЕРКА ИДЕМПОТЕНТНОСТИ: Не обработан ли уже этот платёж
+  getByTelegramPaymentId(telegramPaymentChargeId) {
+    if (!telegramPaymentChargeId) return null;
+    
+    const stmt = db.prepare(`
+      SELECT t.*, u.telegram_id as user_telegram_id, tar.name as tarologist_name
+      FROM transactions t
+      JOIN users u ON t.user_id = u.id
+      JOIN tarologists tar ON t.tarologist_id = tar.id
+      WHERE t.telegram_payment_id = ?
+    `);
+    return stmt.get(telegramPaymentChargeId);
+  },
+
   updateStatus(id, status, telegramPaymentId = null) {
     const stmt = db.prepare(`
-      UPDATE transactions 
+      UPDATE transactions
       SET status = ?, telegram_payment_id = ?
       WHERE id = ?
     `);

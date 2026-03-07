@@ -41,6 +41,17 @@ const PORT = process.env.PORT || 3001;
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_URL = process.env.TELEGRAM_WEBHOOK_URL;
 
+// 🧪 TEST MODE: Для тестирования без реальных звёзд
+const IS_TEST_MODE = process.env.TEST_MODE === 'true';
+const ACTUAL_BOT_TOKEN = IS_TEST_MODE && process.env.TEST_BOT_TOKEN ? process.env.TEST_BOT_TOKEN : BOT_TOKEN;
+
+// Логирование режима при старте
+console.log(`\n🚀 ${IS_TEST_MODE ? '🧪 [TEST MODE]' : '💰 [LIVE MODE]'} Tarot Mini App Server`);
+console.log(`📍 Port: ${PORT}`);
+console.log(`🤖 Bot Token: ${ACTUAL_BOT_TOKEN ? '***' + ACTUAL_BOT_TOKEN.slice(-5) : 'NOT SET'}`);
+console.log(`🔗 Webhook: ${WEBHOOK_URL || 'NOT SET'}`);
+console.log('');
+
 // ========================================
 // Middleware
 // ========================================
@@ -98,7 +109,7 @@ async function sendTelegramMessage(telegramId, text) {
   if (!BOT_TOKEN || !telegramId) return;
 
   try {
-    await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+    await axios.post(`https://api.telegram.org/bot${ACTUAL_BOT_TOKEN}/sendMessage`, {
       chat_id: telegramId,
       text
     });
@@ -116,7 +127,7 @@ async function sendTelegramMessage(telegramId, text) {
 async function callTelegram(method, data = {}) {
   try {
     const response = await axios.post(
-      `https://api.telegram.org/bot${BOT_TOKEN}/${method}`,
+      `https://api.telegram.org/bot${ACTUAL_BOT_TOKEN}/${method}`,
       data
     );
     return response.data;
@@ -282,7 +293,7 @@ app.post('/api/create-invoice', async (req, res) => {
     console.log('🔍 SERVER DEBUG: Invoice data:', JSON.stringify(invoiceData, null, 2));
     
     const response = await axios.post(
-      `https://api.telegram.org/bot${BOT_TOKEN}/sendInvoice`,
+      `https://api.telegram.org/bot${ACTUAL_BOT_TOKEN}/sendInvoice`,
       invoiceData
     );
     
@@ -339,17 +350,25 @@ app.post('/api/payment-webhook', async (req, res) => {
   try {
     const update = req.body;
 
-    // Логирование входящих данных
-    console.log('=== PAYMENT WEBHOOK ===');
-    console.log(JSON.stringify(update, null, 2));
+    // 📝 ПОДРОБНОЕ ЛОГИРОВАНИЕ
+    console.log('💰 PAYMENT WEBHOOK', {
+      type: update.pre_checkout_query ? 'PRE_CHECKOUT' :
+            update.message?.successful_payment ? 'SUCCESSFUL_PAYMENT' :
+            update.message?.invoice?.status === 'cancelled' ? 'CANCELLED' :
+            update.message?.text?.startsWith('/refund') ? 'REFUND' :
+            'UNKNOWN',
+      timestamp: new Date().toISOString(),
+      chatId: update.message?.chat?.id || update.message?.from?.id || 'N/A',
+      data: JSON.stringify(update, null, 2)
+    });
 
     // 0. Обработка команд бота (если это сообщение с командой)
     if (update.message?.text) {
       const chatId = update.message.chat.id;
       const [command, ...args] = update.message.text.split(' ');
-      
+
       console.log(`📩 Получена команда: ${command} от chat_id: ${chatId}`);
-      
+
       // Обрабатываем команды
       await handleCommand(chatId, command.toLowerCase(), args);
     }
@@ -357,7 +376,7 @@ app.post('/api/payment-webhook', async (req, res) => {
     // 1. Pre-checkout query (подтверждение перед оплатой)
     if (update.pre_checkout_query) {
       // Подтверждаем pre-checkout query
-      await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/answerPreCheckoutQuery`, {
+      await axios.post(`https://api.telegram.org/bot${ACTUAL_BOT_TOKEN}/answerPreCheckoutQuery`, {
         pre_checkout_query_id: update.pre_checkout_query.id,
         ok: true
       });
@@ -369,6 +388,13 @@ app.post('/api/payment-webhook', async (req, res) => {
     if (update.message?.successful_payment) {
       const payment = update.message.successful_payment;
       const transactionId = parseInt(payment.invoice_payload.replace('tarot_session_', ''));
+
+      // 🔒 ПРОВЕРКА ИДЕМПОТЕНТНОСТИ: Не обработан ли уже этот платёж
+      const existingTransaction = Transaction.getByTelegramPaymentId(payment.telegram_payment_charge_id);
+      if (existingTransaction) {
+        console.log(`⚠️ Платёж уже обработан: ${payment.telegram_payment_charge_id} (транзакция ${existingTransaction.id})`);
+        return res.json({ ok: true }); // Возвращаем OK, но не обрабатываем повторно
+      }
 
       const transaction = Transaction.getById(transactionId);
       if (!transaction) {
@@ -394,7 +420,7 @@ app.post('/api/payment-webhook', async (req, res) => {
         );
       }
 
-      console.log(`✅ Платёж успешен. Сессия ${chatSession.id} создана.`);
+      console.log(`✅ Платёж успешен. Сессия ${chatSession.id} создана. Payment ID: ${payment.telegram_payment_charge_id}`);
     }
 
     // 3. Отмена оплаты (пользователь отменил после pre-checkout)
@@ -419,28 +445,47 @@ app.post('/api/payment-webhook', async (req, res) => {
       if (transactionId) {
         const transaction = Transaction.getById(transactionId);
         if (transaction && transaction.status === 'completed') {
-          // Возврат средств через Telegram API
-          const refundResult = await axios.post(
-            `https://api.telegram.org/bot${BOT_TOKEN}/refundStarPayment`,
-            {
+          // ⚠️ ОБРАБОТКА ОШИБОК API: Возврат средств через Telegram API
+          try {
+            const refundResult = await axios.post(
+              `https://api.telegram.org/bot${ACTUAL_BOT_TOKEN}/refundStarPayment`,
+              {
+                user_id: transaction.user_telegram_id,
+                telegram_payment_charge_id: transaction.telegram_payment_id
+              },
+              {
+                timeout: 10000, // 10 секунд таймаут
+                validateStatus: (status) => status < 500 // Не считать 4xx ошибкой сети
+              }
+            );
+
+            if (refundResult.data.ok) {
+              // Обновляем статус транзакции
+              Transaction.updateStatus(transactionId, 'refunded');
+
+              // Завершаем сессию если была
+              const session = ChatSession.getActiveByUser(transaction.user_id);
+              if (session) {
+                ChatSession.markCompleted(session.id);
+              }
+
+              console.log(`💰 Возврат средств выполнен. Транзакция ${transactionId}`);
+            } else {
+              console.error('❌ Ошибка возврата:', {
+                error: refundResult.data.description || 'Unknown error',
+                transactionId,
+                timestamp: new Date().toISOString()
+              });
+            }
+          } catch (error) {
+            console.error('❌ Ошибка сети при возврате:', {
+              error: error.message,
+              transactionId,
               user_id: transaction.user_telegram_id,
-              telegram_payment_charge_id: transaction.telegram_payment_id
-            }
-          );
-
-          if (refundResult.data.ok) {
-            // Обновляем статус транзакции
-            Transaction.updateStatus(transactionId, 'refunded');
-
-            // Завершаем сессию если была
-            const session = ChatSession.getActiveByUser(transaction.user_id);
-            if (session) {
-              ChatSession.markCompleted(session.id);
-            }
-
-            console.log(`💰 Возврат средств выполнен. Транзакция ${transactionId}`);
-          } else {
-            console.error('❌ Ошибка возврата:', refundResult.data);
+              timestamp: new Date().toISOString()
+            });
+            // Логировать ошибку для повторной попытки
+            // Можно сохранить в отдельную таблицу для retry
           }
         }
       }
@@ -1084,7 +1129,7 @@ app.get('/api/admin/telegram-user/:id', isAdmin, async (req, res) => {
     
     try {
       const response = await axios.post(
-        `https://api.telegram.org/bot${BOT_TOKEN}/getChat`,
+        `https://api.telegram.org/bot${ACTUAL_BOT_TOKEN}/getChat`,
         { chat_id: telegramId }
       );
       
@@ -1333,7 +1378,7 @@ app.post('/api/admin/cancel-payment', isAdmin, async (req, res) => {
 
     // Возврат средств через Telegram API
     const refundResult = await axios.post(
-      `https://api.telegram.org/bot${BOT_TOKEN}/refundStarPayment`,
+      `https://api.telegram.org/bot${ACTUAL_BOT_TOKEN}/refundStarPayment`,
       {
         user_id: transaction.user_telegram_id,
         telegram_payment_charge_id: transaction.telegram_payment_id,
@@ -2066,7 +2111,7 @@ async function setupWebhook() {
   }
   
   try {
-    await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`, {
+    await axios.post(`https://api.telegram.org/bot${ACTUAL_BOT_TOKEN}/setWebhook`, {
       url: WEBHOOK_URL
     });
     console.log('Вебхук установлен:', WEBHOOK_URL);
