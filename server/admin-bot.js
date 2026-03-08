@@ -5,7 +5,7 @@
 
 import axios from 'axios';
 import dotenv from 'dotenv';
-import { Tarologist, Payout } from './db.js';
+import { Tarologist, Payout, Transaction } from './db.js';
 
 dotenv.config();
 
@@ -42,7 +42,7 @@ async function callTelegram(method, data = {}) {
 async function handleCommand(chatId, command, args) {
   switch (command) {
     case '/start':
-      await handleStart(chatId);
+      await handleStart(chatId, args);
       break;
     
     case '/admin':
@@ -61,7 +61,17 @@ async function handleCommand(chatId, command, args) {
   }
 }
 
-async function handleStart(chatId) {
+async function handleStart(chatId, args = []) {
+  // Проверяем, есть ли параметр оплаты (tarot_{id})
+  const startParam = args[0];
+  if (startParam && startParam.startsWith('tarot_')) {
+    const transactionId = startParam.replace('tarot_', '');
+    
+    // Отправляем инвойс для оплаты
+    await sendPaymentInvoice(chatId, transactionId);
+    return;
+  }
+  
   const welcomeText = `🔮 **Золотое Таро**
 
 Добро пожаловать в админ-панель Tarot Mini App!
@@ -140,6 +150,61 @@ async function handleHelp(chatId) {
     text: helpText,
     parse_mode: 'Markdown'
   });
+}
+
+// Отправка инвойса для оплаты
+async function sendPaymentInvoice(chatId, transactionId) {
+  try {
+    // Получаем данные транзакции из БД
+    const transaction = Transaction.getById(transactionId);
+
+    if (!transaction) {
+      await callTelegram('sendMessage', {
+        chat_id: chatId,
+        text: '❌ Ошибка: транзакция не найдена'
+      });
+      return;
+    }
+
+    if (transaction.status !== 'pending') {
+      await callTelegram('sendMessage', {
+        chat_id: chatId,
+        text: 'ℹ️ Эта консультация уже оплачена или отменена'
+      });
+      return;
+    }
+
+    // Получаем данные таролога
+    const tarologist = Tarologist.getById(transaction.tarologist_id);
+    
+    const title = 'Консультация таролога';
+    const description = `Консультация с тарологом ${tarologist?.name || 'Специалист'} (25 минут)`;
+    const payload = `tarot_session_${transactionId}`;
+    const providerToken = ''; // Для Stars оставляем пустым
+    const currency = 'XTR';
+    const prices = [{ label: 'Консультация', amount: transaction.stars_amount }];
+    
+    // Отправляем инвойс
+    await callTelegram('sendInvoice', {
+      chat_id: chatId,
+      title,
+      description,
+      payload,
+      provider_token: providerToken,
+      currency,
+      prices,
+      start_parameter: `tarot_${transactionId}`
+    });
+    
+    console.log(`✅ Инвойс отправлен для транзакции ${transactionId}`);
+    
+  } catch (error) {
+    console.error('Ошибка отправки инвойса:', error);
+    await callTelegram('sendMessage', {
+      chat_id: chatId,
+      text: '❌ Ошибка при создании инвойса. Попробуйте позже.'
+    });
+  }
 }
 
 // ========================================

@@ -7,94 +7,153 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=202603020000">
-  <link rel="stylesheet" href="css/admin.css?v=202603020000">
+  <link rel="stylesheet" href="css/style.css?v=202603080101">
+  <link rel="stylesheet" href="css/admin.css?v=202603080101">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div id="app">
     <canvas id="stars-canvas"></canvas>
     
-    <!-- Главный экран: статистика -->
+    <!-- Главный экран админ-панели с вкладками -->
     <section id="screen-dashboard" class="screen active">
       <h1 class="admin-title">Админ-панель</h1>
       
-      <!-- Общая статистика -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon">💰</div>
-          <div class="stat-value" id="total-revenue">0</div>
-          <div class="stat-label">Общий доход (звёзд)</div>
+      <!-- Каскадные вкладки -->
+      <div class="tabs-container">
+        <nav class="tabs-nav">
+          <button class="tab-btn active" data-tab="statistics">
+            <span class="tab-icon">📊</span>
+            Статистика
+          </button>
+          <button class="tab-btn" data-tab="tarologists">
+            <span class="tab-icon">👥</span>
+            Тарологи
+          </button>
+          <button class="tab-btn" data-tab="payouts">
+            <span class="tab-icon">💸</span>
+            Выплаты
+          </button>
+          <button class="tab-btn" data-tab="refunds">
+            <span class="tab-icon">↩️</span>
+            Возвраты
+          </button>
+        </nav>
+      </div>
+      
+      <!-- Вкладка: Статистика -->
+      <div id="tab-statistics" class="tab-content active">
+        <!-- Общая статистика -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon">💰</div>
+            <div class="stat-value" id="total-revenue">0</div>
+            <div class="stat-label">Общий доход (звёзд)</div>
+          </div>
+          
+          <div class="stat-card">
+            <div class="stat-icon">📊</div>
+            <div class="stat-value" id="developer-cut">0</div>
+            <div class="stat-label">Комиссия 10% (звёзд)</div>
+          </div>
+          
+          <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-value" id="total-tarologists">0</div>
+            <div class="stat-label">Тарологов</div>
+          </div>
+          
+          <div class="stat-card">
+            <div class="stat-icon">💬</div>
+            <div class="stat-value" id="total-sessions">0</div>
+            <div class="stat-label">Консультаций</div>
+          </div>
+          
+          <div class="stat-card">
+            <div class="stat-icon">↩️</div>
+            <div class="stat-value" id="total-refunds">0</div>
+            <div class="stat-label">Возвратов (<span id="total-refunds-amount">0</span> ⭐)</div>
+          </div>
         </div>
         
-        <div class="stat-card">
-          <div class="stat-icon">📊</div>
-          <div class="stat-value" id="developer-cut">0</div>
-          <div class="stat-label">Комиссия 10% (звёзд)</div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon">👥</div>
-          <div class="stat-value" id="total-tarologists">0</div>
-          <div class="stat-label">Тарологов</div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon">💬</div>
-          <div class="stat-value" id="total-sessions">0</div>
-          <div class="stat-label">Консультаций</div>
+        <!-- Баланс к выплате -->
+        <div class="payout-summary">
+          <h2 class="section-title">💸 К выплате тарологам</h2>
+          <div class="payout-total">
+            <span class="payout-amount" id="total-payout">0</span>
+            <span class="payout-currency">звёзд</span>
+          </div>
         </div>
       </div>
       
-      <!-- Баланс к выплате -->
-      <div class="payout-summary">
-        <h2 class="section-title">💸 К выплате тарологам</h2>
-        <div class="payout-total">
-          <span class="payout-amount" id="total-payout">0</span>
-          <span class="payout-currency">звёзд</span>
-        </div>
-        <button class="action-btn" id="show-payouts-btn">
-          Показать выплаты
+      <!-- Вкладка: Тарологи -->
+      <div id="tab-tarologists" class="tab-content">
+        <button class="add-btn" id="add-tarologist-btn">
+          ➕ Добавить таролога
         </button>
+
+        <div class="tarologists-admin-list" id="tarologists-admin-list">
+          <!-- Загружается динамически -->
+        </div>
+
+        <div class="loading" id="tarologists-loading">
+          <div class="spinner"></div>
+          <p>Загрузка...</p>
+        </div>
       </div>
       
-      <!-- Кнопки навигации -->
-      <div class="nav-buttons">
-        <button class="nav-btn" id="tarologists-btn">
-          👥 Тарологи
-        </button>
-        <button class="nav-btn" id="transactions-btn">
-          📋 Транзакции
-        </button>
+      <!-- Вкладка: Выплаты -->
+      <div id="tab-payouts" class="tab-content">
+        <div class="payouts-list" id="payouts-list">
+          <!-- Загружается динамически -->
+        </div>
+        
+        <div class="loading" id="payouts-loading">
+          <div class="spinner"></div>
+          <p>Загрузка...</p>
+        </div>
+      </div>
+      
+      <!-- Вкладка: Возвраты -->
+      <div id="tab-refunds" class="tab-content">
+        <div class="refunds-section">
+          <div class="refunds-header">
+            <h2>↩️ Возврат средств</h2>
+            <p>Выберите транзакцию для возврата</p>
+          </div>
+          
+          <!-- Список транзакций для возврата -->
+          <div class="refunds-list" id="refunds-list">
+            <!-- Загружается динамически -->
+          </div>
+          
+          <div class="loading" id="refunds-loading">
+            <div class="spinner"></div>
+            <p>Загрузка транзакций...</p>
+          </div>
+          
+          <!-- Сообщение, если нет транзакций -->
+          <div class="no-refunds-message" id="no-refunds-message" style="display: none;">
+            <div class="icon">✅</div>
+            <p>Нет транзакций, доступных для возврата</p>
+          </div>
+          
+          <!-- Кнопки действий -->
+          <div class="refund-actions" id="refund-actions" style="display: none;">
+            <button class="action-btn action-btn-secondary" id="refresh-refunds-btn">
+              🔄 Обновить
+            </button>
+            <button class="action-btn action-btn-danger" id="process-refund-btn" disabled>
+              💰 Вернуть средства
+            </button>
+          </div>
+        </div>
       </div>
     </section>
     
-    <!-- Экран: список тарологов -->
-    <section id="screen-tarologists-list" class="screen">
-      <h2 class="screen-title">Тарологи</h2>
-
-      <!-- Кнопка добавления -->
-      <button class="add-btn" id="add-tarologist-btn">
-        ➕ Добавить таролога
-      </button>
-
-      <div class="tarologists-admin-list" id="tarologists-admin-list">
-        <!-- Загружается динамически -->
-      </div>
-
-      <div class="loading" id="tarologists-loading">
-        <div class="spinner"></div>
-        <p>Загрузка...</p>
-      </div>
-
-      <button class="back-btn" id="back-to-dashboard-tarologists">
-        ← Назад
-      </button>
-    </section>
-    
-    <!-- Экран: транзакции -->
+    <!-- Экран: транзакции (все) -->
     <section id="screen-transactions" class="screen">
-      <h2 class="screen-title">Транзакции</h2>
+      <h2 class="screen-title">Все транзакции</h2>
       
       <!-- Фильтры -->
       <div class="filters">
@@ -116,24 +175,6 @@
       </div>
       
       <button class="back-btn" id="back-to-dashboard-transactions">
-        ← Назад
-      </button>
-    </section>
-    
-    <!-- Экран: выплаты -->
-    <section id="screen-payouts" class="screen">
-      <h2 class="screen-title">Выплаты тарологам</h2>
-      
-      <div class="payouts-list" id="payouts-list">
-        <!-- Загружается динамически -->
-      </div>
-      
-      <div class="loading" id="payouts-loading">
-        <div class="spinner"></div>
-        <p>Загрузка...</p>
-      </div>
-      
-      <button class="back-btn" id="back-to-dashboard-payouts">
         ← Назад
       </button>
     </section>
@@ -357,7 +398,7 @@
 
       // Загрузка admin.js ПОСЛЕ успешной авторизации
       function loadAdminApp() {
-        import('/js/admin.js').then(module => {
+        import('/admin-app/admin.js?v=202603080101').then(module => {
           console.log('✅ Admin app loaded');
           // Вызываем init() после загрузки
           if (module.init) {

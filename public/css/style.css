@@ -1471,6 +1471,36 @@ input:checked + .slider:before {
   box-shadow: 0 4px 16px rgba(212, 175, 55, 0.4);
 }
 
+.tarologist-select-btn:disabled {
+  background: rgba(128, 128, 128, 0.3);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.tarologist-select-btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Статус онлайн */
+.online-status {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+.online-status.online {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.online-status.offline {
+  background: rgba(128, 128, 128, 0.2);
+  color: #888;
+}
+
 .tarologist-loading {
   display: none;
   flex-direction: column;

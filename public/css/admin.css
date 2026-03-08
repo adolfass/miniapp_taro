@@ -2,6 +2,199 @@
    Админ-панель — Стили
    ======================================== */
 
+/* ========================================
+   Каскадные вкладки (Tabs Navigation)
+   ======================================== */
+.tabs-container {
+  width: 100%;
+  max-width: 500px;
+  margin-bottom: 24px;
+  background: rgba(26, 11, 46, 0.8);
+  border-radius: 16px;
+  padding: 4px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.tabs-nav {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 4px;
+}
+
+.tabs-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-btn {
+  flex: 1;
+  min-width: 80px;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 8px;
+  color: var(--text-secondary);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+
+.tab-btn:hover {
+  color: var(--gold);
+  background: rgba(212, 175, 55, 0.1);
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0.3) 100%);
+  color: var(--gold);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.2);
+}
+
+.tab-btn .tab-icon {
+  display: block;
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+/* Содержимое вкладок */
+.tab-content {
+  display: none;
+  animation: fadeIn 0.3s ease;
+}
+
+.tab-content.active {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Специальные стили для вкладки Возвраты */
+.refunds-section {
+  width: 100%;
+  max-width: 500px;
+}
+
+.refunds-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.refunds-header h2 {
+  font-family: 'Cinzel', 'Cormorant Garamond', serif;
+  font-size: 24px;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+
+.refunds-header p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.refunds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.refund-item {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.08) 0%, rgba(212, 175, 55, 0.12) 100%);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refund-item:hover {
+  border-color: rgba(212, 175, 55, 0.5);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.12) 0%, rgba(212, 175, 55, 0.18) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.15);
+}
+
+.refund-item.selected {
+  border-color: var(--gold);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0.3) 100%);
+  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.3);
+}
+
+.refund-item-info {
+  flex: 1;
+}
+
+.refund-item-id {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+.refund-item-details {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.refund-item-amount {
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+  color: #1a0b2e;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.refund-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.refund-actions .action-btn {
+  flex: 1;
+}
+
+.no-refunds-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+}
+
+.no-refunds-message .icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.no-refunds-message p {
+  font-size: 14px;
+}
+
 /* Заголовки */
 .admin-title {
   font-family: 'Cinzel', 'Cormorant Garamond', serif;
@@ -683,4 +876,36 @@
 .action-btn-danger:hover {
   background: linear-gradient(135deg, #ff5252, #ff3838);
   box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+}
+
+/* Онлайн статус бейдж */
+.online-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: 8px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.online-badge.online {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.online-badge.offline {
+  background: rgba(128, 128, 128, 0.2);
+  color: #888;
+}
+
+/* Кнопка переключения онлайн */
+.toggle-online-btn {
+  background: rgba(76, 175, 80, 0.15);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  color: #4caf50;
+}
+
+.toggle-online-btn:hover {
+  background: rgba(76, 175, 80, 0.25);
+  border-color: rgba(76, 175, 80, 0.5);
 }

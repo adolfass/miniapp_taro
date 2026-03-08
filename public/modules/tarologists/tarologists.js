@@ -89,14 +89,14 @@ export async function openTarologistsScreen() {
       'Вы открыли приложение в браузере, а не в Telegram.\n\n' +
       'Для полноценной работы (оплата, чат с тарологом) откройте приложение в Telegram:\n\n' +
       '1. Откройте Telegram на ПК или телефоне\n' +
-      '2. Найдите бота @goldentarot_bot\n' +
+      '2. Найдите бота @goldtarot_test_bot\n' +
       '3. Нажмите "Запустить Mini App"\n\n' +
       'Нажмите OK чтобы продолжить в демо-режиме или Отмена для закрытия.'
     );
 
     if (!confirmed) {
       // Попытка открыть Telegram
-      window.open('https://t.me/goldentarot_bot', '_blank');
+      window.open('https://t.me/goldtarot_test_bot', '_blank');
       return;
     }
   }
@@ -154,13 +154,16 @@ function createTarologistCard(tarologist) {
   const card = document.createElement('div');
   card.className = 'tarologist-card';
   card.dataset.id = tarologist.id;
-  
+
   const starsRating = renderStarsRating(tarologist.rating);
-  
+  const onlineStatus = tarologist.is_online
+    ? '<span class="online-status online">🟢 Онлайн</span>'
+    : '<span class="online-status offline">⚫ Оффлайн</span>';
+
   card.innerHTML = `
     <img src="${tarologist.photo_url}" alt="${tarologist.name}" class="tarologist-avatar">
     <div class="tarologist-info">
-      <div class="tarologist-name">${tarologist.name}</div>
+      <div class="tarologist-name">${tarologist.name} ${onlineStatus}</div>
       <div class="tarologist-description">${tarologist.description}</div>
       <div class="tarologist-meta">
         <div class="tarologist-rating">
@@ -174,7 +177,9 @@ function createTarologistCard(tarologist) {
         <span class="tarologist-level">Ур. ${tarologist.level}</span>
       </div>
     </div>
-    <button class="tarologist-select-btn">Выбрать</button>
+    <button class="tarologist-select-btn" ${!tarologist.is_online ? 'disabled' : ''}>
+      ${tarologist.is_online ? 'Выбрать' : 'Оффлайн'}
+    </button>
   `;
   
   // Клик по карточке
@@ -290,8 +295,25 @@ async function confirmPayment() {
 
     const data = await response.json();
 
+    // DEBUG: Log server response
+    console.log('🔍 DEBUG: Server response:', data);
+    console.log('🔍 DEBUG: data.data:', data.data);
+    console.log('🔍 DEBUG: Invoice link:', data.data?.invoiceLink);
+
     if (!data.success) {
+      // Обработка специальных ошибок
+      if (data.errorCode === 'TAROLOGIST_OFFLINE') {
+        tg.showAlert(data.message || 'Таролог сейчас оффлайн. Пожалуйста, выберите другого таролога или попробуйте позже.');
+        return;
+      }
       throw new Error(data.error || 'Failed to create invoice');
+    }
+    
+    // Проверяем наличие ссылки на инвойс
+    if (!data.data?.invoiceLink) {
+      console.error('❌ DEBUG: Invoice link is missing!');
+      alert('Ошибка: не удалось создать ссылку для оплаты. Попробуйте позже.');
+      return;
     }
 
     currentTransaction = {
@@ -300,6 +322,7 @@ async function confirmPayment() {
     };
 
     // Открываем инвойс Telegram
+    console.log('🔍 DEBUG: Opening invoice with link:', data.data.invoiceLink);
     if (tg.openInvoice) {
       tg.openInvoice(data.data.invoiceLink, async (status) => {
         if (status === 'paid') {
@@ -312,8 +335,15 @@ async function confirmPayment() {
         }
       });
     } else {
-      console.error('❌ tg.openInvoice не доступен');
-      alert('Оплата недоступна в этой версии Telegram.');
+      // Fallback: открываем ссылку напрямую в новой вкладке
+      console.log('⚠️ tg.openInvoice не доступен, используем window.open');
+      window.open(data.data.invoiceLink, '_blank');
+      
+      // Показываем инструкцию пользователю
+      tg.showAlert('Откроется страница оплаты. После оплаты вернитесь в приложение.', () => {
+        // TODO: Проверить статус оплаты через polling или webhook
+        console.log('Пользователь увидел инструкцию по оплате');
+      });
     }
   } catch (error) {
     console.error('Ошибка оплаты:', error);

@@ -6,6 +6,9 @@
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,6 +31,8 @@ db.exec(`
     total_ratings INTEGER DEFAULT 0,
     sessions_completed INTEGER DEFAULT 0,
     telegram_id TEXT UNIQUE,
+    is_online BOOLEAN DEFAULT 0,
+    last_online_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -52,6 +57,9 @@ db.exec(`
     tarologist_cut INTEGER DEFAULT 0,
     status TEXT DEFAULT 'pending',
     telegram_payment_id TEXT,
+    auto_refund_processed BOOLEAN DEFAULT 0,
+    auto_refund_reason TEXT,
+    refunded_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (tarologist_id) REFERENCES tarologists(id)
@@ -157,13 +165,15 @@ export const Tarologist = {
         rating,
         total_ratings,
         sessions_completed,
-        telegram_id
+        telegram_id,
+        is_online,
+        last_online_at
       FROM tarologists
       ORDER BY rating DESC, sessions_completed DESC
     `);
-    
+
     const tarologists = stmt.all();
-    
+
     return tarologists.map(t => ({
       ...t,
       level: Math.floor(t.sessions_completed / 10) + 1,
@@ -220,13 +230,51 @@ export const Tarologist = {
     return stmt.run(id);
   },
 
+  // Обновить статус онлайн
+  setOnlineStatus(id, isOnline) {
+    const stmt = db.prepare(`
+      UPDATE tarologists 
+      SET is_online = ?, last_online_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    return stmt.run(isOnline ? 1 : 0, id);
+  },
+
+  // Получить только онлайн тарологов
+  getOnline() {
+    const stmt = db.prepare(`
+      SELECT 
+        id,
+        name,
+        photo_url,
+        description,
+        rating,
+        total_ratings,
+        sessions_completed,
+        telegram_id,
+        is_online,
+        last_online_at
+      FROM tarologists
+      WHERE is_online = 1
+      ORDER BY rating DESC, sessions_completed DESC
+    `);
+
+    const tarologists = stmt.all();
+
+    return tarologists.map(t => ({
+      ...t,
+      level: Math.floor(t.sessions_completed / 10) + 1,
+      price: calculatePrice(t.sessions_completed)
+    }));
+  },
+
   // Создать таролога (для инициализации)
   create(data) {
     const stmt = db.prepare(`
-      INSERT INTO tarologists (name, photo_url, description, telegram_id)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO tarologists (name, photo_url, description, telegram_id, is_online)
+      VALUES (?, ?, ?, ?, ?)
     `);
-    return stmt.run(data.name, data.photo_url, data.description, data.telegram_id);
+    return stmt.run(data.name, data.photo_url, data.description, data.telegram_id, data.is_online || 0);
   }
 };
 
@@ -313,6 +361,34 @@ export const Transaction = {
       WHERE id = ?
     `);
     return stmt.run(status, telegramPaymentId, id);
+  },
+
+  // Обработать автоматический возврат
+  markAutoRefunded(id, reason) {
+    const stmt = db.prepare(`
+      UPDATE transactions
+      SET status = 'refunded', auto_refund_processed = 1, auto_refund_reason = ?, refunded_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    return stmt.run(reason, id);
+  },
+
+  // Получить транзакции для автоматической проверки (оплаченные, но без сообщений)
+  getPendingForAutoRefund(minutesThreshold = 10) {
+    const stmt = db.prepare(`
+      SELECT t.*, u.telegram_id as user_telegram_id, tar.name as tarologist_name,
+             cs.id as session_id, cs.start_time as session_start
+      FROM transactions t
+      JOIN users u ON t.user_id = u.id
+      JOIN tarologists tar ON t.tarologist_id = tar.id
+      LEFT JOIN chat_sessions cs ON t.user_id = cs.user_id 
+        AND t.tarologist_id = cs.tarologist_id
+        AND cs.start_time >= t.created_at
+      WHERE t.status = 'completed'
+        AND t.auto_refund_processed = 0
+        AND datetime(t.created_at, '+${minutesThreshold} minutes') <= datetime('now')
+    `);
+    return stmt.all();
   }
 };
 
@@ -359,12 +435,39 @@ export const ChatSession = {
   isExpired(id) {
     const session = this.getById(id);
     if (!session) return true;
-    
+
     const startTime = new Date(session.start_time).getTime();
     const now = Date.now();
     const elapsed = (now - startTime) / 1000;
-    
+
     return elapsed >= session.duration_seconds;
+  },
+
+  // Получить количество сообщений в сессии
+  getMessageCount(id) {
+    const stmt = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM messages
+      WHERE session_id = ?
+    `);
+    const result = stmt.get(id);
+    return result ? result.count : 0;
+  },
+
+  // Проверить, есть ли сообщения в сессии (от обоих сторон)
+  hasMessages(id) {
+    return this.getMessageCount(id) > 0;
+  },
+
+  // Получить последнюю сессию между пользователем и тарологом
+  getLastSession(userId, tarologistId) {
+    const stmt = db.prepare(`
+      SELECT * FROM chat_sessions
+      WHERE user_id = ? AND tarologist_id = ?
+      ORDER BY start_time DESC
+      LIMIT 1
+    `);
+    return stmt.get(userId, tarologistId);
   }
 };
 
@@ -546,11 +649,11 @@ export const Payout = {
 
   // Получить баланс таролога (сумма транзакций - сумма выплат)
   getTarologistBalance(tarologistId) {
-    // Сумма всех завершённых транзакций (tarologist_cut)
+    // Сумма всех завершённых транзакций (tarologist_cut), исключая возвращенные
     const earningsStmt = db.prepare(`
       SELECT COALESCE(SUM(tarologist_cut), 0) as total
       FROM transactions
-      WHERE tarologist_id = ? AND status = 'completed'
+      WHERE tarologist_id = ? AND status = 'completed' AND status != 'refunded'
     `);
     const earnings = earningsStmt.get(tarologistId).total;
 
@@ -576,6 +679,13 @@ export const Payout = {
  * @returns {number} цена в звёздах
  */
 export function calculatePrice(sessionsCompleted) {
+  // ТЕСТОВЫЙ РЕЖИМ: Если установлена TEST_PRICE, используем её
+  const testPrice = process.env.TEST_PRICE;
+  if (testPrice && !isNaN(parseInt(testPrice))) {
+    console.log(`🧪 TEST MODE: Using test price ${testPrice} stars instead of calculated price`);
+    return parseInt(testPrice);
+  }
+  
   const level = Math.floor(sessionsCompleted / 10) + 1;
   const price = 33 * Math.pow(1.1, level - 1);
   return Math.min(Math.round(price), 333);

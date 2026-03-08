@@ -37,19 +37,23 @@ if (import.meta?.env?.DEV) {
       sendData: (data) => console.log('sendData:', data),
       openInvoice: (url, callback) => {
         console.log('Opening invoice:', url);
-        // Пытаемся открыть Telegram через URL схему
-        const telegramUrl = url.replace('https://t.me/', 'tg://resolve?domain=');
         
-        // Пробуем открыть Telegram
-        const opened = window.open(telegramUrl, '_blank');
+        // ВАРИАНТ 1: Открываем invoice-ссылку напрямую
+        // Ссылки формата https://t.me/$... открывают нативный интерфейс оплаты Stars
+        window.open(url, '_blank');
         
-        // Если не удалось открыть Telegram, пробуем оригинальную ссылку
-        if (!opened || opened.closed || typeof opened.closed === 'undefined') {
-          window.open(url, '_blank');
-        }
-        
-        // Имитируем успешную оплату через 2 секунды
+        // Имитируем успешную оплату через 2 секунды (только для DEV режима)
         setTimeout(() => callback('paid'), 2000);
+        
+        /* 
+        // ВАРИАНТ 2 (ЗАПАСНОЙ): Использовать sendInvoice вместо createInvoiceLink
+        // Этот вариант более надёжный - инвойс отправляется прямо в чат с ботом
+        // Нужно:
+        // 1. На сервере использовать sendInvoice вместо createInvoiceLink
+        // 2. Показывать пользователю сообщение "Перейдите в чат с ботом для оплаты"
+        // 3. После оплаты webhook получит событие и создаст сессию
+        // Реализация: см. admin-bot.js функцию sendPaymentInvoice
+        */
       }
     }
   };

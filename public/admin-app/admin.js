@@ -19,8 +19,11 @@ let currentStats = null;
 let currentTarologists = [];
 let currentTransactions = [];
 let currentPayouts = [];
+let currentRefundableTransactions = [];
 let selectedTarologistId = null;
 let selectedPayoutId = null;
+let selectedRefundTransaction = null;
+let currentTab = 'statistics';
 
 // ========================================
 // DOM Элементы
@@ -33,6 +36,8 @@ let tarologistModal = null;
 let payoutConfirmModal = null;
 let tarologistEditModal = null;
 let refundModal = null;
+let tabButtons = null;
+let tabContents = null;
 
 // Элементы формы редактирования
 let editModalTitle = null;
@@ -95,6 +100,10 @@ export async function init() {
   tarologistEditModal = document.getElementById('tarologist-edit-modal');
   refundModal = document.getElementById('refund-modal');
 
+  // Инициализация вкладок
+  tabButtons = document.querySelectorAll('.tab-btn');
+  tabContents = document.querySelectorAll('.tab-content');
+
   editModalTitle = document.getElementById('edit-modal-title');
   editTelegramId = document.getElementById('edit-telegram-id');
   editName = document.getElementById('edit-name');
@@ -112,6 +121,14 @@ export async function init() {
       e.preventDefault();
       const pasted = e.clipboardData.getData('text');
       editTelegramId.value = pasted.replace(/\D/g, '');
+    });
+
+    // Автоматическое получение данных при потере фокуса (blur)
+    editTelegramId.addEventListener('blur', async () => {
+      const telegramId = editTelegramId.value.trim();
+      if (telegramId && telegramId.length >= 5) {
+        await fetchTelegramUserData(telegramId);
+      }
     });
   }
 
@@ -143,6 +160,50 @@ async function loadDashboard() {
   } catch (error) {
     console.error('Error loading dashboard:', error);
     showAlert('Ошибка загрузки данных: ' + error.message);
+  }
+}
+
+// Получение данных пользователя из Telegram
+async function fetchTelegramUserData(telegramId) {
+  try {
+    console.log('🔍 Fetching Telegram user data for ID:', telegramId);
+
+    // Показываем индикатор загрузки
+    const originalText = editName?.placeholder || 'Имя';
+    if (editName) editName.placeholder = 'Загрузка...';
+
+    const response = await fetch(`${API_BASE}/telegram-user/${telegramId}`, {
+      headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      console.log('ℹ️ User not found in Telegram or API error');
+      if (editName) editName.placeholder = originalText;
+      return;
+    }
+
+    const userData = await response.json();
+    console.log('✅ User data received:', userData);
+
+    // Заполняем поля формы
+    if (userData.first_name && editName) {
+      editName.value = userData.first_name + (userData.last_name ? ' ' + userData.last_name : '');
+    }
+
+    if (userData.username && editDescription) {
+      editDescription.value = `@${userData.username}`;
+    }
+
+    // Фото профиля (если есть)
+    if (userData.photo_url && editPhotoUrl) {
+      editPhotoUrl.value = userData.photo_url;
+    }
+
+    showAlert('✅ Данные пользователя получены из Telegram!');
+
+  } catch (error) {
+    console.error('❌ Error fetching user data:', error);
+    // Не показываем ошибку пользователю, просто логируем
   }
 }
 
@@ -216,18 +277,81 @@ async function loadPayouts() {
   }
 }
 
+async function loadRefundableTransactions() {
+  showLoading('refunds-loading', true);
+  document.getElementById('no-refunds-message').style.display = 'none';
+  
+  try {
+    const response = await fetch(`${API_BASE}/refundable-transactions`, {
+      headers: getAuthHeaders()
+    });
+    
+    if (!response.ok) {
+      throw new Error('Ошибка загрузки транзакций');
+    }
+    
+    currentRefundableTransactions = await response.json();
+    renderRefundableTransactionsList();
+  } catch (error) {
+    console.error('Error loading refundable transactions:', error);
+    showAlert('Ошибка: ' + error.message);
+  } finally {
+    showLoading('refunds-loading', false);
+  }
+}
+
+// ========================================
+// Переключение вкладок
+// ========================================
+function switchTab(tabName) {
+  // Обновляем активную вкладку
+  currentTab = tabName;
+  
+  // Обновляем кнопки вкладок
+  tabButtons.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  
+  // Обновляем содержимое вкладок
+  tabContents.forEach(content => {
+    content.classList.toggle('active', content.id === `tab-${tabName}`);
+  });
+  
+  // Загружаем данные для вкладки, если нужно
+  if (tabName === 'tarologists' && currentTarologists.length === 0) {
+    loadTarologists();
+  } else if (tabName === 'payouts' && currentPayouts.length === 0) {
+    loadPayouts();
+  } else if (tabName === 'refunds') {
+    loadRefundableTransactions();
+  }
+  
+  console.log(`🔄 Switched to tab: ${tabName}`);
+}
+
 // ========================================
 // Обновление UI
 // ========================================
 function updateDashboardUI() {
   if (!currentStats) return;
-  
+
   // Общая статистика
   document.getElementById('total-revenue').textContent = formatNumber(currentStats.totalRevenue || 0);
   document.getElementById('developer-cut').textContent = formatNumber(currentStats.developerCut || 0);
   document.getElementById('total-tarologists').textContent = currentStats.totalTarologists || 0;
   document.getElementById('total-sessions').textContent = currentStats.totalSessions || 0;
-  
+
+  // Статистика возвратов
+  const totalRefundsEl = document.getElementById('total-refunds');
+  const totalRefundsAmountEl = document.getElementById('total-refunds-amount');
+
+  if (totalRefundsEl) {
+    totalRefundsEl.textContent = formatNumber(currentStats.totalRefunds || 0);
+  }
+  if (totalRefundsAmountEl) {
+    totalRefundsAmountEl.textContent = formatNumber(currentStats.totalRefundsAmount || 0);
+  }
+
   // Баланс к выплате
   document.getElementById('total-payout').textContent = formatNumber(currentStats.totalPayout || 0);
 }
@@ -248,12 +372,20 @@ function renderTarologistsList() {
   container.innerHTML = currentTarologists.map(tarologist => `
     <div class="tarologist-admin-card" data-id="${tarologist.id}">
       <div class="tarologist-admin-info">
-        <div class="tarologist-admin-name">${escapeHtml(tarologist.name)}</div>
+        <div class="tarologist-admin-name">
+          ${escapeHtml(tarologist.name)}
+          <span class="online-badge ${tarologist.is_online ? 'online' : 'offline'}">
+            ${tarologist.is_online ? '🟢 Онлайн' : '⚫ Оффлайн'}
+          </span>
+        </div>
         <div class="tarologist-admin-meta">
           <span>⭐ ${tarologist.rating?.toFixed(1) || '0.0'}</span>
           <span>💬 ${tarologist.sessions_count || 0}</span>
         </div>
         <div class="tarologist-admin-actions">
+          <button class="tarologist-action-btn toggle-online-btn" data-id="${tarologist.id}" data-online="${tarologist.is_online ? '1' : '0'}">
+            ${tarologist.is_online ? '⚫ В оффлайн' : '🟢 В онлайн'}
+          </button>
           <button class="tarologist-action-btn edit-btn" data-id="${tarologist.id}">✏️ Редактировать</button>
           <button class="tarologist-action-btn delete-btn" data-id="${tarologist.id}">🗑️ Удалить</button>
         </div>
@@ -319,6 +451,62 @@ function renderPayoutsList() {
       <div class="payout-status ${payout.status}">${payout.status === 'completed' ? '✅' : '⏳'} ${payout.status === 'completed' ? 'Выполнено' : 'Ожидает'}</div>
     </div>
   `).join('');
+}
+
+function renderRefundableTransactionsList() {
+  const container = document.getElementById('refunds-list');
+  const actionsContainer = document.getElementById('refund-actions');
+  const noRefundsMessage = document.getElementById('no-refunds-message');
+  const processRefundBtn = document.getElementById('process-refund-btn');
+  
+  // Фильтруем только успешные транзакции
+  const refundableTransactions = currentRefundableTransactions.filter(t => t.status === 'completed');
+  
+  if (refundableTransactions.length === 0) {
+    container.innerHTML = '';
+    container.style.display = 'none';
+    noRefundsMessage.style.display = 'block';
+    actionsContainer.style.display = 'none';
+    return;
+  }
+  
+  container.style.display = 'flex';
+  noRefundsMessage.style.display = 'none';
+  actionsContainer.style.display = 'flex';
+  
+  container.innerHTML = refundableTransactions.map(transaction => `
+    <div class="refund-item" data-id="${transaction.id}">
+      <div class="refund-item-info">
+        <div class="refund-item-id">#${transaction.id} - ${escapeHtml(transaction.tarologist_name || 'Таролог')}</div>
+        <div class="refund-item-details">
+          Пользователь: ${transaction.user_telegram_id || '—'} • ${formatDate(transaction.created_at)}
+        </div>
+      </div>
+      <div class="refund-item-amount">${formatNumber(transaction.stars_amount)} ⭐</div>
+    </div>
+  `).join('');
+  
+  // Добавляем обработчики клика по элементам
+  container.querySelectorAll('.refund-item').forEach(item => {
+    item.addEventListener('click', () => {
+      // Убираем выделение со всех элементов
+      container.querySelectorAll('.refund-item').forEach(i => i.classList.remove('selected'));
+      
+      // Выделяем текущий элемент
+      item.classList.add('selected');
+      
+      // Сохраняем выбранную транзакцию
+      const transactionId = parseInt(item.dataset.id);
+      selectedRefundTransaction = refundableTransactions.find(t => t.id === transactionId);
+      
+      // Активируем кнопку возврата
+      if (processRefundBtn) {
+        processRefundBtn.disabled = false;
+      }
+      
+      console.log('Selected transaction for refund:', selectedRefundTransaction);
+    });
+  });
 }
 
 // ========================================
@@ -517,6 +705,33 @@ function setupEventListeners() {
     openEditModal();
   });
 
+  // Переключение онлайн статуса
+  document.getElementById('tarologists-admin-list')?.addEventListener('click', async (e) => {
+    if (e.target.closest('.toggle-online-btn')) {
+      const btn = e.target.closest('.toggle-online-btn');
+      const tarologistId = btn.dataset.id;
+      const currentStatus = btn.dataset.online === '1';
+      const newStatus = !currentStatus;
+      
+      try {
+        const response = await fetch(`${API_BASE}/tarologist/${tarologistId}/online`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ is_online: newStatus })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to update online status');
+        }
+        
+        showAlert(`Таролог ${newStatus ? 'в онлайн' : 'в оффлайн'}`);
+        await loadTarologists();
+      } catch (error) {
+        showAlert('Ошибка: ' + error.message);
+      }
+    }
+  });
+
   // Редактирование таролога
   document.getElementById('tarologists-admin-list')?.addEventListener('click', (e) => {
     if (e.target.closest('.edit-btn')) {
@@ -626,6 +841,30 @@ function setupEventListeners() {
     if (e.target === tarologistEditModal) {
       closeEditModal();
     }
+  });
+  
+  // ВКЛАДКИ: Переключение вкладок
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabName = btn.dataset.tab;
+      switchTab(tabName);
+    });
+  });
+  
+  // ВКЛАДКА ВОЗВРАТЫ: Обновить список
+  document.getElementById('refresh-refunds-btn')?.addEventListener('click', () => {
+    loadRefundableTransactions();
+  });
+  
+  // ВКЛАДКА ВОЗВРАТЫ: Кнопка "Вернуть средства"
+  document.getElementById('process-refund-btn')?.addEventListener('click', () => {
+    if (!selectedRefundTransaction) {
+      showAlert('Выберите транзакцию для возврата');
+      return;
+    }
+    
+    // Открываем модальное окно подтверждения возврата
+    openRefundModal(selectedRefundTransaction);
   });
 }
 

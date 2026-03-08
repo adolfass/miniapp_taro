@@ -10,6 +10,13 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    open: false
+    open: false,
+    proxy: {
+      '/api': {
+        target: 'https://goldtarot.ru',
+        changeOrigin: true,
+        secure: true
+      }
+    }
   }
 })
