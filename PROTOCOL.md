@@ -67,11 +67,14 @@
 
 ```
 1. Менеджер ставит задачу → Qwen Code
-2. Qwen Code пишет/исправляет код (локально)
+2. Qwen Code пишет/исправляет код (локально, на MacBook)
 3. Qwen Code создаёт инструкцию для Agent
+4. Qwen Code НЕ делает git commit/push (это делает Agent)
 ```
 
 **Результат:** Код готов локально, инструкция создана
+
+**Важно:** Qwen НЕ коммитит и НЕ пушит код — это делает Opencode Agent по инструкции
 
 ---
 
@@ -421,6 +424,89 @@ Opencode Agent:
 
 ---
 
+### 2.2. 🔒 СИНХРОНИЗАЦИЯ GIT И ОБРАБОТКА КОНФЛИКТОВ
+
+**Проблема:** Qwen и Agent работают с одним репозиторием параллельно.
+
+**Решение:**
+
+#### **Блокировка при записи:**
+
+**Qwen Code (перед записью кода):**
+```bash
+# 1. Проверить что Agent не пушит отчёт
+git pull origin main
+
+# 2. Если в exchange/toQwen.md есть изменения → подождать
+# 3. Писать код только после того как Agent закончил пуш
+```
+
+**Opencode Agent (перед пушем отчёта):**
+```bash
+# 1. Проверить статус git
+git status
+
+# 2. Если есть локальные изменения от Qwen → сначала pull
+git pull origin main
+
+# 3. Добавить отчёт и запушить
+git add exchange/toQwen.md
+git commit -m "docs: отчёт"
+git push origin main
+```
+
+#### **Обработка конфликтов:**
+
+**Если git push не удался (conflict):**
+```bash
+# Agent:
+git pull origin main --rebase
+# Если конфликт в exchange/toQwen.md → принять удалённую версию
+git checkout --theirs exchange/toQwen.md
+git add exchange/toQwen.md
+git commit -m "docs: отчёт (после rebase)"
+git push origin main
+```
+
+**Правило:**
+- ✅ `exchange/toQwen.md` — **всегда принимается версия Agent** (это его отчёт)
+- ✅ `exchange/toopencode.md` — **всегда принимается версия Qwen** (это инструкция Qwen)
+- ✅ Код приложения — **принимается версия Qwen** (Qwen пишет код)
+
+#### **Временная блокировка (lock):**
+
+**Agent пишет отчёт:**
+```bash
+# 1. Создать lock-файл (опционально)
+touch /tmp/git-push-in-progress
+
+# 2. Написать отчёт
+cat > exchange/toQwen.md << 'EOF'
+...
+EOF
+
+# 3. Запушить
+git add exchange/toQwen.md
+git commit -m "docs: отчёт"
+git push origin main
+
+# 4. Удалить lock-файл
+rm /tmp/git-push-in-progress
+```
+
+**Qwen перед записью кода:**
+```bash
+# Проверить что Agent не пушит отчёт
+if [ -f /tmp/git-push-in-progress ]; then
+  echo "⏳ Жду завершения git push от Agent..."
+  sleep 5
+fi
+
+# Теперь можно писать код
+```
+
+---
+
 **Менеджер (НЕ агент!):**
 
 ```
@@ -551,20 +637,29 @@ exchange/toQwen_*.md  ← ❌ Удалить!
 
 ### Задача: Исправить кнопки в админке
 
-**1. Qwen Code пишет исправление:**
+**1. Qwen Code пишет исправление (локально):**
+
 ```bash
-git add -A
-git commit -m "fix: кнопки не работали"
-git push origin main
+# Qwen пишет код локально (MacBook)
+# Файлы изменены: public/admin-app/admin.js
 ```
 
 **2. Qwen Code создаёт инструкцию:**
+
 ```bash
-cat > /tmp/toOpencode_buttonfix.md << 'EOF'
+# Инструкция создаётся ЛОКАЛЬНО в exchange/
+cat > exchange/toopencode.md << 'EOF'
 # Исправление кнопок
 
+## Версия протокола: 5.4.0
+
+## Код готов:
+- public/admin-app/admin.js (исправлено)
+
 ## Деплой:
+cd /var/www/tarot-miniapp
 git pull origin main
+npm run build
 pm2 restart tarot-server
 
 ## Тесты:
@@ -572,25 +667,39 @@ pm2 restart tarot-server
 2. Проверить кнопки "Транзакции"
 3. Проверить модальные окна
 
+## Разрешение на пуш:
+- ✅ Код можно пушить (это исправление бага)
+
 ## Отчёт:
-exchange/toQwen.md
+exchange/toQwen.md (на сервере) → git push на GitHub
 EOF
 
-scp /tmp/toOpencode_buttonfix.md root@server:/var/www/tarot-miniapp/exchange/
+# Менеджер отправляет инструкцию через SCP
+scp exchange/toopencode.md root@server:/var/www/tarot-miniapp/exchange/
 ```
 
 **3. Opencode Agent выполняет:**
+
 ```bash
 cd /var/www/tarot-miniapp
+
+# Загрузить код (который Qwen уже запушил ранее)
 git pull origin main
+
+# Сборка
+npm run build
+
+# Перезапуск
 pm2 restart tarot-server
 
 # Тесты
 # ...
 
-# Отчёт
+# Отчёт (ОБЯЗАН ПУШИТЬ НА GITHUB)
 cat > exchange/toQwen.md << 'EOF'
 # Отчёт
+
+## Версия протокола: 5.4.1
 
 ## Тесты:
 - Кнопки "Тарологи": ✅
@@ -599,15 +708,34 @@ cat > exchange/toQwen.md << 'EOF'
 
 ## Статус: ГОТОВО
 EOF
+
+# Запушить отчёт на GitHub (ОБЯЗАТЕЛЬНО!)
+git add exchange/toQwen.md
+git commit -m "docs: отчёт - исправление кнопок"
+git push origin main
 ```
 
 **4. Qwen Code читает отчёт:**
+
 ```bash
-ssh root@server "cat /var/www/tarot-miniapp/exchange/toQwen.md"
+# Qwen читает отчёт ЛОКАЛЬНО (после git pull)
+git pull origin main
+cat exchange/toQwen.md
+
+# Если статус "ГОТОВО" → задача закрыта
+# Если статус "ТРЕБУЕТ ИСПРАВЛЕНИЯ" → повторить цикл
 ```
 
-**5. Если статус "ГОТОВО" → задача закрыта**  
-**Если статус "ТРЕБУЕТ ИСПРАВЛЕНИЯ" → повторить цикл**
+**5. Если код требует изменений:**
+
+```bash
+# Qwen пишет исправления локально
+# Менеджер создаёт новую инструкцию с разрешением на пуш
+# Agent пушит код на GitHub
+git add -A
+git commit -m "fix: кнопки - повторное исправление"
+git push origin main
+```
 
 ---
 
@@ -617,9 +745,15 @@ ssh root@server "cat /var/www/tarot-miniapp/exchange/toQwen.md"
 
 | Инструмент | Назначение |
 |------------|------------|
-| `git commit/push` | Отправка кода на GitHub |
+| `git pull` | Чтение отчётов из GitHub |
+| `git add -A` | Добавление изменений (локально) |
 | `scp` | Отправка инструкций на сервер |
-| `ssh cat` | Чтение отчётов с сервера |
+| `cat exchange/toopencode.md` | Чтение/запись инструкций (локально) |
+
+**НЕ ИСПОЛЬЗУЕТ:**
+- ❌ `ssh` (запрещено подключаться к серверу)
+- ❌ `git commit` (это делает Agent)
+- ❌ `git push` (это делает Agent)
 
 ---
 
