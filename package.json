@@ -9,11 +9,18 @@
     "preview": "vite preview",
     "deploy": "npm run build && npx gh-pages -d dist"
   },
-  "keywords": ["tarot", "telegram", "miniapp"],
+  "keywords": [
+    "tarot",
+    "telegram",
+    "miniapp"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "vite": "^7.3.1",
-    "gh-pages": "^6.1.1"
+    "gh-pages": "^6.1.1",
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1"
   }
 }

@@ -369,27 +369,38 @@ function renderTarologistsList() {
     return;
   }
 
-  container.innerHTML = currentTarologists.map(tarologist => `
-    <div class="tarologist-admin-card" data-id="${tarologist.id}">
+  container.innerHTML = currentTarologists.map(tarologist => {
+    const isActive = tarologist.is_active !== 0;
+    const statusBadge = !isActive 
+      ? '<span class="status-badge disabled">🔴 Отключен</span>'
+      : (tarologist.is_online 
+        ? '<span class="online-badge online">🟢 Онлайн</span>' 
+        : '<span class="online-badge offline">⚫ Оффлайн</span>');
+    
+    const actionButton = isActive
+      ? `<button class="tarologist-action-btn disable-btn" data-id="${tarologist.id}">🔕 Отключить</button>`
+      : `<button class="tarologist-action-btn enable-btn" data-id="${tarologist.id}">✅ Подключить</button>`;
+    
+    return `
+    <div class="tarologist-admin-card ${!isActive ? 'disabled-tarologist' : ''}" data-id="${tarologist.id}">
       <div class="tarologist-admin-info">
         <div class="tarologist-admin-name">
           ${escapeHtml(tarologist.name)}
-          <span class="online-badge ${tarologist.is_online ? 'online' : 'offline'}">
-            ${tarologist.is_online ? '🟢 Онлайн' : '⚫ Оффлайн'}
-          </span>
+          ${statusBadge}
         </div>
         <div class="tarologist-admin-meta">
           <span>⭐ ${tarologist.rating?.toFixed(1) || '0.0'}</span>
           <span>💬 ${tarologist.sessions_count || 0}</span>
+          ${!isActive ? '<span class="inactive-label">❌ Неактивен</span>' : ''}
         </div>
         <div class="tarologist-admin-actions">
           <button class="tarologist-action-btn edit-btn" data-id="${tarologist.id}">✏️ Редактировать</button>
-          <button class="tarologist-action-btn disable-btn" data-id="${tarologist.id}">🔕 Отключить</button>
+          ${actionButton}
         </div>
       </div>
-      <div class="tarologist-admin-balance">${formatNumber(tarologist.balance || 0)} ⭐</div>
+      <div class="tarologist-admin-balance ${!isActive ? 'inactive-balance' : ''}">${formatNumber(tarologist.balance || 0)} ⭐</div>
     </div>
-  `).join('');
+  `}).join('');
 }
 
 function renderTransactionsList() {
@@ -719,7 +730,7 @@ function setupEventListeners() {
       const btn = e.target.closest('.disable-btn');
       const tarologist = currentTarologists.find(t => t.id == btn.dataset.id);
       if (tarologist) {
-        if (confirm(`Отключить таролога "${tarologist.name}"?\n\nТаролог не будет отображаться в списке для клиентов.`)) {
+        if (confirm(`Отключить таролога "${tarologist.name}"?\n\nТаролог не будет отображаться в списке для клиентов, но останется в админке.`)) {
           try {
             const response = await fetch(`${API_BASE}/tarologist/${tarologist.id}/disable`, {
               method: 'PUT',
@@ -731,6 +742,33 @@ function setupEventListeners() {
             }
             
             showAlert(`Таролог "${tarologist.name}" отключен`);
+            await loadTarologists();
+          } catch (error) {
+            showAlert('Ошибка: ' + error.message);
+          }
+        }
+      }
+    }
+  });
+
+  // Включение таролога
+  document.getElementById('tarologists-admin-list')?.addEventListener('click', async (e) => {
+    if (e.target.closest('.enable-btn')) {
+      const btn = e.target.closest('.enable-btn');
+      const tarologist = currentTarologists.find(t => t.id == btn.dataset.id);
+      if (tarologist) {
+        if (confirm(`Подключить таролога "${tarologist.name}"?\n\nТаролог снова будет отображаться в списке для клиентов.`)) {
+          try {
+            const response = await fetch(`${API_BASE}/tarologist/${tarologist.id}/enable`, {
+              method: 'PUT',
+              headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+              throw new Error('Failed to enable tarologist');
+            }
+            
+            showAlert(`Таролог "${tarologist.name}" подключен`);
             await loadTarologists();
           } catch (error) {
             showAlert('Ошибка: ' + error.message);

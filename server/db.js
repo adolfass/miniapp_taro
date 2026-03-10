@@ -150,11 +150,61 @@ db.exec(`
 `);
 
 // ========================================
+// Миграции - добавление новых колонок
+// ========================================
+
+// Добавляем колонки для отслеживания онлайн статуса, если их нет
+try {
+  db.exec(`
+    ALTER TABLE tarologists ADD COLUMN is_active BOOLEAN DEFAULT 1;
+  `);
+  console.log('✅ Добавлена колонка is_active в tarologists');
+} catch (e) {
+  // Колонка уже существует
+}
+
+try {
+  db.exec(`
+    ALTER TABLE tarologists ADD COLUMN last_heartbeat_at DATETIME;
+  `);
+  console.log('✅ Добавлена колонка last_heartbeat_at в tarologists');
+} catch (e) {
+  // Колонка уже существует
+}
+
+try {
+  db.exec(`
+    ALTER TABLE tarologists ADD COLUMN last_ready_at DATETIME;
+  `);
+  console.log('✅ Добавлена колонка last_ready_at в tarologists');
+} catch (e) {
+  // Колонка уже существует
+}
+
+try {
+  db.exec(`
+    ALTER TABLE tarologists ADD COLUMN ready_until DATETIME;
+  `);
+  console.log('✅ Добавлена колонка ready_until в tarologists');
+} catch (e) {
+  // Колонка уже существует
+}
+
+try {
+  db.exec(`
+    ALTER TABLE tarologists ADD COLUMN last_ws_ping DATETIME;
+  `);
+  console.log('✅ Добавлена колонка last_ws_ping в tarologists');
+} catch (e) {
+  // Колонка уже существует
+}
+
+// ========================================
 // Модели
 // ========================================
 
 export const Tarologist = {
-  // Получить всех активных тарологов с рассчитанной ценой
+  // Получить ВСЕХ тарологов (для админки) - включая отключенных
   getAll() {
     const stmt = db.prepare(`
       SELECT 
@@ -168,19 +218,126 @@ export const Tarologist = {
         telegram_id,
         is_online,
         last_online_at,
-        is_active
+        is_active,
+        last_heartbeat_at,
+        last_ready_at,
+        ready_until,
+        last_ws_ping
+      FROM tarologists
+      ORDER BY is_active DESC, rating DESC, sessions_completed DESC
+    `);
+
+    const tarologists = stmt.all();
+    const now = new Date();
+
+    return tarologists.map(t => {
+      // Вычисляем реальный статус онлайн только для активных
+      const realOnline = t.is_active ? this._checkOnlineStatus(t, now) : false;
+      
+      // Обновляем кэшированный статус в БД если изменился (только для активных)
+      if (t.is_active && t.is_online !== realOnline) {
+        db.prepare('UPDATE tarologists SET is_online = ? WHERE id = ?').run(realOnline ? 1 : 0, t.id);
+      }
+
+      // В тестовом режиме цена всегда 1 звезда
+      const isTestMode = process.env.TEST_MODE === 'true';
+      const price = isTestMode ? 1 : calculatePrice(t.sessions_completed);
+      
+      return {
+        ...t,
+        is_online: realOnline,
+        level: Math.floor(t.sessions_completed / 10) + 1,
+        price: price
+      };
+    });
+  },
+
+  // Получить только активных тарологов (для клиентов)
+  getAllActive() {
+    const stmt = db.prepare(`
+      SELECT 
+        id,
+        name,
+        photo_url,
+        description,
+        rating,
+        total_ratings,
+        sessions_completed,
+        telegram_id,
+        is_online,
+        last_online_at,
+        is_active,
+        last_heartbeat_at,
+        last_ready_at,
+        ready_until,
+        last_ws_ping
       FROM tarologists
       WHERE is_active = 1
       ORDER BY rating DESC, sessions_completed DESC
     `);
 
     const tarologists = stmt.all();
+    const now = new Date();
 
-    return tarologists.map(t => ({
-      ...t,
-      level: Math.floor(t.sessions_completed / 10) + 1,
-      price: calculatePrice(t.sessions_completed)
-    }));
+    return tarologists.map(t => {
+      const realOnline = this._checkOnlineStatus(t, now);
+      
+      if (t.is_online !== realOnline) {
+        db.prepare('UPDATE tarologists SET is_online = ? WHERE id = ?').run(realOnline ? 1 : 0, t.id);
+      }
+
+      // В тестовом режиме цена всегда 1 звезда
+      const isTestMode = process.env.TEST_MODE === 'true';
+      const price = isTestMode ? 1 : calculatePrice(t.sessions_completed);
+      
+      return {
+        ...t,
+        is_online: realOnline,
+        level: Math.floor(t.sessions_completed / 10) + 1,
+        price: price
+      };
+    });
+  },
+
+  // Внутренний метод проверки онлайн статуса
+  _checkOnlineStatus(tarologist, now = new Date()) {
+    // 1. Проверка WebSocket соединения (последние 5 минут)
+    // WebSocket heartbeat - самый приоритетный, так как реальное соединение
+    if (tarologist.last_ws_ping) {
+      const wsDiff = (now - new Date(tarologist.last_ws_ping)) / 1000 / 60;
+      if (wsDiff <= 5) {
+        return true;
+      }
+    }
+    
+    // 2. Проверка HTTP heartbeat (устаревший метод, для обратной совместимости)
+    if (tarologist.last_heartbeat_at) {
+      const heartbeatDiff = (now - new Date(tarologist.last_heartbeat_at)) / 1000 / 60;
+      if (heartbeatDiff <= 5) {
+        return true;
+      }
+    }
+    
+    // 3. Проверка ручного подтверждения
+    if (tarologist.ready_until) {
+      const readyDiff = (new Date(tarologist.ready_until) - now) / 1000 / 60;
+      if (readyDiff > 0) {
+        return true;
+      }
+    }
+    
+    // 3. Проверка активной сессии чата
+    const activeSession = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM chat_sessions 
+      WHERE tarologist_id = ? AND active = 1
+    `).get(tarologist.id);
+    
+    if (activeSession.count > 0) {
+      return true;
+    }
+    
+    return false;
   },
 
   // Получить таролога по ID
@@ -246,10 +403,104 @@ export const Tarologist = {
   disable(id) {
     const stmt = db.prepare(`
       UPDATE tarologists 
-      SET is_active = 0
+      SET is_active = 0, is_online = 0
       WHERE id = ?
     `);
     return stmt.run(id);
+  },
+
+  // Включить таролога обратно
+  enable(id) {
+    const stmt = db.prepare(`
+      UPDATE tarologists 
+      SET is_active = 1
+      WHERE id = ?
+    `);
+    return stmt.run(id);
+  },
+
+  // Heartbeat - таролог активен (приложение открыто)
+  heartbeat(id) {
+    const stmt = db.prepare(`
+      UPDATE tarologists 
+      SET last_heartbeat_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    return stmt.run(id);
+  },
+
+  // WebSocket heartbeat - более точный метод через WebSocket соединение
+  wsHeartbeat(id) {
+    const stmt = db.prepare(`
+      UPDATE tarologists 
+      SET last_ws_ping = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    return stmt.run(id);
+  },
+
+  // Таролог подтвердил готовность к работе (30 минут)
+  setReady(id, minutes = 30) {
+    // Используем JavaScript время для консистентности с isRealOnline()
+    const now = new Date();
+    const readyUntil = new Date(now.getTime() + minutes * 60000);
+    
+    const stmt = db.prepare(`
+      UPDATE tarologists 
+      SET 
+        last_ready_at = ?,
+        ready_until = ?
+      WHERE id = ?
+    `);
+    return stmt.run(now.toISOString(), readyUntil.toISOString(), id);
+  },
+
+  // Проверить реальный онлайн статус (комбинированная логика)
+  isRealOnline(id) {
+    // Получаем данные таролога
+    const tarologist = this.getById(id);
+    if (!tarologist || !tarologist.is_active) {
+      return false;
+    }
+
+    const now = new Date();
+    
+    // 1. Проверка WebSocket соединения (последние 5 минут) - ПРИОРИТЕТНЫЙ
+    if (tarologist.last_ws_ping) {
+      const wsDiff = (now - new Date(tarologist.last_ws_ping)) / 1000 / 60; // минуты
+      if (wsDiff <= 5) {
+        return true;
+      }
+    }
+    
+    // 2. Проверка HTTP heartbeat (последние 5 минут) - для обратной совместимости
+    if (tarologist.last_heartbeat_at) {
+      const heartbeatDiff = (now - new Date(tarologist.last_heartbeat_at)) / 1000 / 60; // минуты
+      if (heartbeatDiff <= 5) {
+        return true;
+      }
+    }
+    
+    // 3. Проверка ручного подтверждения (ready_until не истек)
+    if (tarologist.ready_until) {
+      const readyDiff = (new Date(tarologist.ready_until) - now) / 1000 / 60; // минуты
+      if (readyDiff > 0) {
+        return true;
+      }
+    }
+    
+    // 4. Проверка активной сессии чата
+    const activeSession = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM chat_sessions 
+      WHERE tarologist_id = ? AND active = 1
+    `).get(id);
+    
+    if (activeSession.count > 0) {
+      return true;
+    }
+    
+    return false;
   },
 
   // Получить только онлайн тарологов
@@ -433,6 +684,24 @@ export const ChatSession = {
       LIMIT 1
     `);
     return stmt.get(userId);
+  },
+
+  getActiveByTarologist(tarologistId) {
+    const stmt = db.prepare(`
+      SELECT 
+        cs.*,
+        u.first_name as user_name,
+        u.telegram_id as user_telegram_id,
+        (SELECT text FROM messages WHERE session_id = cs.id ORDER BY created_at DESC LIMIT 1) as last_message,
+        (SELECT COUNT(*) FROM messages WHERE session_id = cs.id) as message_count
+      FROM chat_sessions cs
+      JOIN users u ON cs.user_id = u.id
+      WHERE cs.tarologist_id = ? 
+        AND cs.active = 1 
+        AND cs.completed = 0
+      ORDER BY cs.start_time DESC
+    `);
+    return stmt.all(tarologistId);
   },
 
   markCompleted(id) {

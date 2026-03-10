@@ -3,13 +3,16 @@
  * Сервер для интеграции Telegram Stars и чата с тарологами
  */
 
+// Загружаем .env ПЕРВЫМ - до всех импортов!
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import axios from 'axios';
 import crypto from 'crypto';
-import dotenv from 'dotenv';
 
 import db, {
   Tarologist,
@@ -24,9 +27,15 @@ import db, {
   initializeTestData
 } from './db.js';
 import adminBot from './admin-bot.js';
-const { handleWebhookUpdate, handleCommand } = adminBot;
+const { handleWebhookUpdate, handleCommand, startBot } = adminBot;
 
-dotenv.config();
+// Запускаем бота только если нет webhook
+if (!process.env.TELEGRAM_WEBHOOK_URL) {
+  console.log('🤖 Starting bot in polling mode...');
+  startBot();
+} else {
+  console.log('🤖 Bot will use webhook mode (no polling)');
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -143,11 +152,11 @@ async function callTelegram(method, data = {}) {
 
 /**
  * GET /api/tarologists
- * Получить список всех тарологов
+ * Получить список активных тарологов (для клиентов)
  */
 app.get('/api/tarologists', (req, res) => {
   try {
-    const tarologists = Tarologist.getAll();
+    const tarologists = Tarologist.getAllActive();
     res.json({ success: true, data: tarologists });
   } catch (error) {
     console.error('Ошибка получения тарологов:', error);
@@ -241,7 +250,8 @@ app.post('/api/create-invoice', async (req, res) => {
     );
     
     // Расчёт распределения платежа
-    const starsAmount = tarologist.price;
+    // В тестовом режиме цена всегда 1 звезда
+    const starsAmount = IS_TEST_MODE ? 1 : tarologist.price;
     const developerCut = Math.round(starsAmount * 0.1); // 10%
     const tarologistCut = starsAmount - developerCut; // 90%
     
@@ -724,6 +734,95 @@ function isAdmin(req, res, next) {
   next();
 }
 
+// ========================================
+// Middleware для проверки таролога
+// ========================================
+async function isTarologist(req, res, next) {
+  try {
+    const initData = req.headers['x-telegram-init-data'];
+    
+    if (!initData) {
+      return res.status(401).json({ success: false, error: 'No Telegram data' });
+    }
+    
+    if (!validateTelegramData(initData)) {
+      return res.status(401).json({ success: false, error: 'Invalid Telegram data' });
+    }
+    
+    const params = new URLSearchParams(initData);
+    const userJson = params.get('user');
+    
+    if (!userJson) {
+      return res.status(401).json({ success: false, error: 'No user data' });
+    }
+    
+    const userData = JSON.parse(userJson);
+    
+    // Ищем таролога по telegram_id
+    const tarologist = Tarologist.getByTelegramId(userData.id.toString());
+    
+    if (!tarologist) {
+      return res.status(403).json({ success: false, error: 'Not a tarologist' });
+    }
+    
+    if (!tarologist.is_active) {
+      return res.status(403).json({ success: false, error: 'Tarologist is disabled' });
+    }
+    
+    req.tarologist = tarologist;
+    req.telegramUser = userData;
+    next();
+    
+  } catch (error) {
+    console.error('Tarologist auth error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+/**
+ * GET /api/tarologist/me
+ * Получить данные текущего таролога
+ */
+app.get('/api/tarologist/me', isTarologist, (req, res) => {
+  res.json({ success: true, data: req.tarologist });
+});
+
+/**
+ * GET /api/tarologist/sessions/active
+ * Получить активные сессии таролога
+ */
+app.get('/api/tarologist/sessions/active', isTarologist, (req, res) => {
+  try {
+    const sessions = ChatSession.getActiveByTarologist(req.tarologist.id);
+    res.json({ success: true, data: sessions });
+  } catch (error) {
+    console.error('Error getting active sessions:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/chat/session/:id/messages
+ * Получить сообщения сессии
+ */
+app.get('/api/chat/session/:id/messages', isTarologist, (req, res) => {
+  try {
+    const sessionId = req.params.id;
+    
+    // Проверяем, что сессия принадлежит этому тарологу
+    const session = ChatSession.getById(sessionId);
+    if (!session || session.tarologist_id !== req.tarologist.id) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    const messages = Message.getBySession(sessionId);
+    res.json({ success: true, data: messages });
+  } catch (error) {
+    console.error('Error getting messages:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 /**
  * GET /api/admin/stats
  * Получить общую статистику для админки
@@ -1168,7 +1267,150 @@ app.get('/api/admin/telegram-user/:id', isAdmin, async (req, res) => {
 });
 
 // ========================================
-// Tarologist Management API
+// Tarologist Online Status API (Public endpoints for tarologists)
+// ========================================
+
+/**
+ * POST /api/tarologist/:id/heartbeat
+ * Heartbeat от таролога (приложение открыто)
+ */
+app.post('/api/tarologist/:id/heartbeat', (req, res) => {
+  try {
+    const tarologistId = req.params.id;
+    const { initData } = req.body;
+    
+    // Валидация Telegram данных
+    if (!validateTelegramData(initData)) {
+      return res.status(401).json({ success: false, error: 'Invalid Telegram data' });
+    }
+    
+    // Получаем tarologist по ID и проверяем, что telegram_id совпадает
+    const params = new URLSearchParams(initData);
+    const userJson = params.get('user');
+    if (!userJson) {
+      return res.status(400).json({ success: false, error: 'No user data' });
+    }
+    
+    const userData = JSON.parse(userJson);
+    const tarologist = Tarologist.getById(tarologistId);
+    
+    if (!tarologist) {
+      return res.status(404).json({ success: false, error: 'Tarologist not found' });
+    }
+    
+    // Проверяем, что запрос от самого таролога
+    if (tarologist.telegram_id !== userData.id.toString()) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    // Обновляем heartbeat
+    Tarologist.heartbeat(tarologistId);
+    
+    // Возвращаем актуальный статус
+    const isOnline = Tarologist.isRealOnline(tarologistId);
+    
+    res.json({ 
+      success: true, 
+      data: { 
+        is_online: isOnline,
+        last_heartbeat_at: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Heartbeat error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/tarologist/:id/ready
+ * Таролог подтверждает готовность к работе (30 минут)
+ */
+app.post('/api/tarologist/:id/ready', (req, res) => {
+  try {
+    const tarologistId = req.params.id;
+    const { initData, minutes = 30 } = req.body;
+    
+    // Валидация Telegram данных
+    if (!validateTelegramData(initData)) {
+      return res.status(401).json({ success: false, error: 'Invalid Telegram data' });
+    }
+    
+    // Получаем tarologist по ID и проверяем, что telegram_id совпадает
+    const params = new URLSearchParams(initData);
+    const userJson = params.get('user');
+    if (!userJson) {
+      return res.status(400).json({ success: false, error: 'No user data' });
+    }
+    
+    const userData = JSON.parse(userJson);
+    const tarologist = Tarologist.getById(tarologistId);
+    
+    if (!tarologist) {
+      return res.status(404).json({ success: false, error: 'Tarologist not found' });
+    }
+    
+    // Проверяем, что запрос от самого таролога
+    if (tarologist.telegram_id !== userData.id.toString()) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    // Устанавливаем статус "готов"
+    Tarologist.setReady(tarologistId, minutes);
+    
+    // Возвращаем актуальный статус
+    const isOnline = Tarologist.isRealOnline(tarologistId);
+    const readyUntil = new Date(Date.now() + minutes * 60000).toISOString();
+    
+    res.json({ 
+      success: true, 
+      data: { 
+        is_online: isOnline,
+        ready_until: readyUntil,
+        minutes: minutes
+      }
+    });
+  } catch (error) {
+    console.error('Set ready error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/tarologist/:id/status
+ * Получить текущий статус онлайн таролога
+ */
+app.get('/api/tarologist/:id/status', (req, res) => {
+  try {
+    const tarologistId = req.params.id;
+    const tarologist = Tarologist.getById(tarologistId);
+    
+    if (!tarologist) {
+      return res.status(404).json({ success: false, error: 'Tarologist not found' });
+    }
+    
+    const isOnline = Tarologist.isRealOnline(tarologistId);
+    
+    res.json({ 
+      success: true, 
+      data: {
+        id: tarologist.id,
+        name: tarologist.name,
+        is_online: isOnline,
+        last_heartbeat_at: tarologist.last_heartbeat_at,
+        last_ready_at: tarologist.last_ready_at,
+        ready_until: tarologist.ready_until,
+        is_active: tarologist.is_active
+      }
+    });
+  } catch (error) {
+    console.error('Get status error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ========================================
+// Tarologist Management API (Admin only)
 // ========================================
 
 /**
@@ -1779,7 +2021,7 @@ app.put('/api/admin/tarologist/:id/online', isAdmin, (req, res) => {
 
 /**
  * PUT /api/admin/tarologist/:id/disable
- * Отключить таролога (не удалять, а скрыть из списка)
+ * Отключить таролога
  */
 app.put('/api/admin/tarologist/:id/disable', isAdmin, (req, res) => {
   try {
@@ -1790,13 +2032,37 @@ app.put('/api/admin/tarologist/:id/disable', isAdmin, (req, res) => {
       return res.status(404).json({ success: false, error: 'Таролог не найден' });
     }
 
-    // Отключаем таролога (не удаляем!)
+    // Отключаем таролога
     Tarologist.disable(tarologistId);
 
     console.log(`🔕 Таролог ${tarologistId} (${tarologist.name}) отключен`);
     res.json({ success: true, message: 'Таролог отключен' });
   } catch (error) {
     console.error('Ошибка отключения таролога:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * PUT /api/admin/tarologist/:id/enable
+ * Включить таролога обратно
+ */
+app.put('/api/admin/tarologist/:id/enable', isAdmin, (req, res) => {
+  try {
+    const tarologistId = req.params.id;
+
+    const tarologist = Tarologist.getById(tarologistId);
+    if (!tarologist) {
+      return res.status(404).json({ success: false, error: 'Таролог не найден' });
+    }
+
+    // Включаем таролога
+    Tarologist.enable(tarologistId);
+
+    console.log(`✅ Таролог ${tarologistId} (${tarologist.name}) включен`);
+    res.json({ success: true, message: 'Таролог включен' });
+  } catch (error) {
+    console.error('Ошибка включения таролога:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
@@ -1875,6 +2141,67 @@ app.delete('/api/admin/tarologist/:id', isAdmin, (req, res) => {
  */
 app.post('/api/bot/webhook', async (req, res) => {
   const update = req.body;
+  
+  // 📝 Логирование всех входящих webhook
+  console.log('🔍 WEBHOOK: Received update:', {
+    type: update.callback_query ? 'callback_query' :
+          update.message?.successful_payment ? 'successful_payment' :
+          update.pre_checkout_query ? 'pre_checkout_query' :
+          update.message ? 'message' : 'unknown',
+    timestamp: new Date().toISOString()
+  });
+  
+  // Обработка successful_payment (оплата)
+  if (update.message?.successful_payment) {
+    console.log('💰 WEBHOOK: Payment received:', update.message.successful_payment);
+    const payment = update.message.successful_payment;
+    const transactionId = parseInt(payment.invoice_payload.replace('tarot_session_', ''));
+    
+    // Проверка идемпотентности
+    const existingTransaction = Transaction.getByTelegramPaymentId(payment.telegram_payment_charge_id);
+    if (existingTransaction) {
+      console.log(`⚠️ Платёж уже обработан: ${payment.telegram_payment_charge_id}`);
+      return res.json({ ok: true });
+    }
+    
+    const transaction = Transaction.getById(transactionId);
+    if (!transaction) {
+      console.error(`❌ Транзакция не найдена: ${transactionId}`);
+      return res.status(404).json({ ok: false, error: 'Transaction not found' });
+    }
+    
+    // Обновляем статус
+    Transaction.updateStatus(transactionId, 'completed', payment.telegram_payment_charge_id);
+    
+    // Создаём сессию чата
+    const chatSession = ChatSession.create({
+      userId: transaction.user_id,
+      tarologistId: transaction.tarologist_id,
+      durationSeconds: 1500
+    });
+    
+    // Уведомляем таролога
+    const tarologist = Tarologist.getById(transaction.tarologist_id);
+    if (tarologist?.telegram_id) {
+      await sendTelegramMessage(
+        tarologist.telegram_id,
+        `🔮 Новая консультация!\n\nКлиент оплатил сессию.\nСессия ID: ${chatSession.id}\nНачните чат в приложении.`
+      );
+    }
+    
+    console.log(`✅ Платёж успешен. Сессия ${chatSession.id} создана.`);
+    return res.json({ ok: true });
+  }
+  
+  // Обработка pre_checkout_query
+  if (update.pre_checkout_query) {
+    console.log('💰 WEBHOOK: Pre-checkout query:', update.pre_checkout_query.id);
+    await axios.post(`https://api.telegram.org/bot${ACTUAL_BOT_TOKEN}/answerPreCheckoutQuery`, {
+      pre_checkout_query_id: update.pre_checkout_query.id,
+      ok: true
+    });
+    return res.json({ ok: true });
+  }
   
   // Обработка callback_query (кнопки)
   if (update.callback_query) {
@@ -2035,14 +2362,33 @@ app.post('/api/spread/send', async (req, res) => {
       cards
     });
     
-    // Если указан таролог — отправляем уведомление
+    // Если указан таролог — отправляем уведомление с полным раскладом
     if (tarologistId) {
       const tarologist = Tarologist.getById(tarologistId);
       if (tarologist?.telegram_id) {
-        const cardsList = cards.map(c => c.name_ru).join(', ');
+        // Формируем детальный расклад
+        let cardsDetails = cards.map((c, index) => 
+          `${index + 1}. ${c.name_ru}\n${c.description_ru || c.meaning_ru || 'Описание отсутствует'}`
+        ).join('\n\n');
+        
+        const message = `🔮 Новый расклад от клиента!
+
+📋 Тип: ${spreadType === 'daily' ? 'Ежедневный' : 'На ситуацию'}
+
+🃏 Карты и их значения:
+
+${cardsDetails}
+
+💬 Для ответа клиенту:
+1. Откройте Mini App (кнопка ниже)
+2. Перейдите в раздел "Чаты"
+3. Найдите сессию с клиентом
+
+⚠️ ВАЖНО: Отвечайте только через Mini App, не в этом чате!`;
+
         await sendTelegramMessage(
           tarologist.telegram_id,
-          `🔮 Новый расклад от клиента!\n\nТип: ${spreadType === 'daily' ? 'Ежедневный' : 'На ситуацию'}\nКарты: ${cardsList}\n\nНачните чат в приложении.`
+          message
         );
       }
     }
@@ -2095,14 +2441,96 @@ app.get('/api/spread/my', (req, res) => {
 io.on('connection', (socket) => {
   console.log('Клиент подключился:', socket.id);
   
+  // ========================================
+  // WebSocket Online Status для тарологов
+  // ========================================
+  
+  // Таролог подключается для отслеживания онлайн статуса
+  socket.on('tarologist-connect', (data) => {
+    const { tarologistId, initData } = data;
+    
+    // Валидация Telegram данных
+    if (!validateTelegramData(initData)) {
+      socket.emit('error', { message: 'Invalid Telegram data' });
+      return;
+    }
+    
+    // Проверяем, что это действительно таролог
+    const params = new URLSearchParams(initData);
+    const userJson = params.get('user');
+    if (!userJson) {
+      socket.emit('error', { message: 'No user data' });
+      return;
+    }
+    
+    const userData = JSON.parse(userJson);
+    const tarologist = Tarologist.getById(tarologistId);
+    
+    if (!tarologist) {
+      socket.emit('error', { message: 'Tarologist not found' });
+      return;
+    }
+    
+    // Проверяем, что запрос от самого таролога
+    if (tarologist.telegram_id !== userData.id.toString()) {
+      socket.emit('error', { message: 'Access denied' });
+      return;
+    }
+    
+    // Сохраняем данные таролога в сокете
+    socket.data.tarologistId = tarologistId;
+    socket.data.userType = 'tarologist';
+    
+    // Обновляем WebSocket heartbeat
+    Tarologist.wsHeartbeat(tarologistId);
+    
+    // Отправляем подтверждение и текущий статус
+    const isOnline = Tarologist.isRealOnline(tarologistId);
+    socket.emit('tarologist-status', {
+      is_online: isOnline,
+      last_ws_ping: new Date().toISOString()
+    });
+    
+    console.log(`🔌 Таролог ${tarologistId} (${tarologist.name}) подключился через WebSocket`);
+    
+    // Устанавливаем интервал для heartbeat (отправляем пинг каждые 2 минуты)
+    const pingInterval = setInterval(() => {
+      if (socket.connected) {
+        socket.emit('tarologist-ping');
+      }
+    }, 2 * 60 * 1000); // 2 минуты
+    
+    socket.data.pingInterval = pingInterval;
+  });
+  
+  // Таролог отвечает на ping (heartbeat)
+  socket.on('tarologist-pong', () => {
+    if (socket.data.tarologistId) {
+      Tarologist.wsHeartbeat(socket.data.tarologistId);
+      console.log(`💓 WebSocket heartbeat от таролога ${socket.data.tarologistId}`);
+    }
+  });
+  
+  // ========================================
+  // WebSocket для чата (существующий код)
+  // ========================================
+  
   // Подключение к сессии чата
   socket.on('join-session', (data) => {
     const { sessionId, userId, userType } = data; // userType: 'client' | 'tarologist'
     
     socket.join(`session_${sessionId}`);
-    socket.data = { sessionId, userId, userType };
+    socket.data = { ...socket.data, sessionId, userId, userType };
     
     console.log(`Пользователь ${userId} (${userType}) подключился к сессии ${sessionId}`);
+    
+    // Если это таролог, также обновляем его WebSocket статус
+    if (userType === 'tarologist') {
+      const tarologist = Tarologist.getById(userId);
+      if (tarologist) {
+        Tarologist.wsHeartbeat(userId);
+      }
+    }
     
     // Отправляем историю сообщений
     const messages = Message.getBySession(sessionId);
@@ -2162,6 +2590,18 @@ io.on('connection', (socket) => {
   
   socket.on('disconnect', () => {
     console.log('Клиент отключился:', socket.id);
+    
+    // Очищаем интервал heartbeat если был установлен
+    if (socket.data.pingInterval) {
+      clearInterval(socket.data.pingInterval);
+    }
+    
+    // Если это был таролог, логируем отключение
+    // ВАЖНО: Не сразу помечаем как оффлайн!
+    // Даём 5 минут таймаута на переподключение
+    if (socket.data.tarologistId) {
+      console.log(`🔌 Таролог ${socket.data.tarologistId} отключился. Даём 5 минут на переподключение...`);
+    }
   });
 });
 
@@ -2174,25 +2614,26 @@ initializeTestData();
 
 // Настройка вебхука Telegram при старте
 async function setupWebhook() {
-  // Webhook отключен - используем polling для бота админки
-  console.log('Вебхук отключен - используется polling для бота');
-  return;
-  
-  /*
   if (!WEBHOOK_URL || !BOT_TOKEN) {
-    console.log('Вебхук не настроен (нет WEBHOOK_URL или BOT_TOKEN)');
+    console.log('⚠️ Вебхук не настроен (нет WEBHOOK_URL или BOT_TOKEN)');
+    console.log('   Используется polling для бота');
     return;
   }
   
   try {
+    // Удаляем старый вебхук перед установкой нового
+    await axios.post(`https://api.telegram.org/bot${ACTUAL_BOT_TOKEN}/deleteWebhook`);
+    
+    // Устанавливаем новый вебхук
     await axios.post(`https://api.telegram.org/bot${ACTUAL_BOT_TOKEN}/setWebhook`, {
-      url: WEBHOOK_URL
+      url: WEBHOOK_URL,
+      allowed_updates: ['message', 'callback_query', 'pre_checkout_query']
     });
-    console.log('Вебхук установлен:', WEBHOOK_URL);
+    console.log('✅ Вебхук установлен:', WEBHOOK_URL);
   } catch (error) {
-    console.error('Ошибка установки вебхука:', error.message);
+    console.error('❌ Ошибка установки вебхука:', error.message);
+    console.log('   Переключаемся на polling...');
   }
-  */
 }
 
 // ========================================

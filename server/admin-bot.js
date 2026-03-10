@@ -53,11 +53,84 @@ async function handleCommand(chatId, command, args) {
       await handleHelp(chatId);
       break;
     
+    case '/ready':
+    case '/готов':
+      await handleReadyCommand(chatId);
+      break;
+    
+    case '/status':
+    case '/статус':
+      await handleStatusCommand(chatId);
+      break;
+    
     default:
       await callTelegram('sendMessage', {
         chat_id: chatId,
         text: 'Неизвестная команда. Используйте /help для справки.'
       });
+  }
+}
+
+/**
+ * Команда /ready - таролог подтверждает готовность
+ */
+async function handleReadyCommand(chatId) {
+  const tarologist = Tarologist.getByTelegramId(chatId.toString());
+  
+  if (!tarologist) {
+    await callTelegram('sendMessage', {
+      chat_id: chatId,
+      text: '❌ Вы не зарегистрированы как таролог.\n\nЧтобы стать тарологом, свяжитесь с администратором.'
+    });
+    return;
+  }
+  
+  // Устанавливаем статус готовности
+  Tarologist.setReady(tarologist.id, 30);
+  
+  // ВАЖНО: Перезагружаем данные после обновления
+  const updatedTarologist = Tarologist.getByTelegramId(chatId.toString());
+  
+  // Проверяем, является ли админом
+  const isAdmin = ADMIN_TELEGRAM_ID && chatId.toString() === ADMIN_TELEGRAM_ID;
+  
+  // Показываем обновлённое меню (с учетом роли админа)
+  if (isAdmin) {
+    await showAdminTarologistMenu(chatId, updatedTarologist);
+  } else {
+    await showTarologistMenu(chatId, updatedTarologist);
+  }
+  
+  // Отправляем подтверждение
+  await callTelegram('sendMessage', {
+    chat_id: chatId,
+    text: `🟢 Отлично! Вы теперь видны клиентам.\n\n⏱️ Статус активен 30 минут.\n💡 Клиенты могут выбрать вас для консультации.`,
+    parse_mode: 'Markdown'
+  });
+}
+
+/**
+ * Команда /status - проверить свой статус
+ */
+async function handleStatusCommand(chatId) {
+  const tarologist = Tarologist.getByTelegramId(chatId.toString());
+  
+  if (!tarologist) {
+    await callTelegram('sendMessage', {
+      chat_id: chatId,
+      text: '❌ Вы не зарегистрированы как таролог.'
+    });
+    return;
+  }
+  
+  // Проверяем, является ли админом
+  const isAdmin = ADMIN_TELEGRAM_ID && chatId.toString() === ADMIN_TELEGRAM_ID;
+  
+  // Показываем меню со статусом (с учетом роли админа)
+  if (isAdmin) {
+    await showAdminTarologistMenu(chatId, tarologist);
+  } else {
+    await showTarologistMenu(chatId, tarologist);
   }
 }
 
@@ -72,7 +145,27 @@ async function handleStart(chatId, args = []) {
     return;
   }
   
-  const welcomeText = `🔮 **Золотое Таро**
+  // Проверяем, является ли пользователь админом
+  const isAdmin = ADMIN_TELEGRAM_ID && chatId.toString() === ADMIN_TELEGRAM_ID;
+  
+  // Проверяем, является ли пользователь тарологом
+  const tarologist = Tarologist.getByTelegramId(chatId.toString());
+  
+  // Если пользователь И админ И таролог - показываем специальное комбинированное меню
+  if (isAdmin && tarologist) {
+    await showAdminTarologistMenu(chatId, tarologist);
+    return;
+  }
+  
+  // Если только таролог - показываем меню таролога
+  if (tarologist) {
+    await showTarologistMenu(chatId, tarologist);
+    return;
+  }
+  
+  // Если только админ - показываем админ-меню
+  if (isAdmin) {
+    const welcomeText = `🔮 **Золотое Таро**
 
 Добро пожаловать в админ-панель Tarot Mini App!
 
@@ -82,14 +175,45 @@ async function handleStart(chatId, args = []) {
 
 **Статус сервера:** ✅ Работает`;
 
-  // Кнопки для открытия админки и регистрации тарологов
+    const keyboard = {
+      reply_markup: {
+        inline_keyboard: [
+          [{
+            text: '🔐 Открыть админ-панель',
+            web_app: { url: `${WEB_APP_URL}/admin.html?v=${Date.now()}` }
+          }],
+          [{
+            text: '💰 Для тарологов',
+            callback_data: 'tarologist_info'
+          }]
+        ]
+      },
+      parse_mode: 'Markdown'
+    };
+
+    await callTelegram('sendMessage', {
+      chat_id: chatId,
+      text: welcomeText,
+      ...keyboard
+    });
+    return;
+  }
+  
+  // Обычный пользователь
+  const welcomeText = `🔮 **Золотое Таро**
+
+Добро пожаловать!
+
+Этот бот помогает получить консультацию от профессиональных тарологов.
+
+**Доступные команды:**
+/help — Справка
+
+**Статус сервера:** ✅ Работает`;
+
   const keyboard = {
     reply_markup: {
       inline_keyboard: [
-        [{
-          text: '🔐 Открыть админ-панель',
-          web_app: { url: `${WEB_APP_URL}/admin.html?v=${Date.now()}` }
-        }],
         [{
           text: '💰 Для тарологов',
           callback_data: 'tarologist_info'
@@ -102,6 +226,157 @@ async function handleStart(chatId, args = []) {
   await callTelegram('sendMessage', {
     chat_id: chatId,
     text: welcomeText,
+    ...keyboard
+  });
+}
+
+/**
+ * Показать комбинированное меню для админа-таролога
+ */
+async function showAdminTarologistMenu(chatId, tarologist) {
+  const isOnline = Tarologist.isRealOnline(tarologist.id);
+  const balance = Payout.getTarologistBalance(tarologist.id);
+  
+  // Формируем статус
+  let statusEmoji = isOnline ? '🟢' : '🔴';
+  let statusText = isOnline ? 'Онлайн' : 'Оффлайн';
+  
+  // Проверяем активную сессию
+  const db = (await import('./db.js')).default;
+  const activeSession = db.prepare(`
+    SELECT COUNT(*) as count 
+    FROM chat_sessions 
+    WHERE tarologist_id = ? AND active = 1
+  `).get(tarologist.id);
+  
+  let sessionText = '';
+  if (activeSession.count > 0) {
+    sessionText = '\n📱 Активная консультация';
+  }
+  
+  // Проверяем ready_until
+  let readyText = '';
+  if (tarologist.ready_until) {
+    const readyUntil = new Date(tarologist.ready_until);
+    const now = new Date();
+    if (readyUntil > now) {
+      const minutesLeft = Math.ceil((readyUntil - now) / 60000);
+      readyText = `\n⏱️ Готов ещё ${minutesLeft} мин`;
+    }
+  }
+  
+  const menuText = `👑 **Админ + Таролог**
+
+💼 Ваш профиль:
+👤 Имя: ${tarologist.name}
+${statusEmoji} Статус: ${statusText}${readyText}${sessionText}
+💰 Баланс: ${balance} ⭐
+✨ Консультаций: ${tarologist.sessions_completed || 0}
+⭐ Рейтинг: ${tarologist.rating?.toFixed(1) || '5.0'}
+
+🔐 **Вы также администратор**`;
+
+  // Кнопки для админа-таролога
+  const keyboard = {
+    reply_markup: {
+      inline_keyboard: [
+        [{
+          text: '🔐 Админ-панель',
+          web_app: { url: `${WEB_APP_URL}/admin.html?v=${Date.now()}` }
+        }],
+        [{
+          text: '💬 Мои чаты',
+          web_app: { url: `${WEB_APP_URL}/tarologist-chat.html?v=${Date.now()}` }
+        }],
+        [{
+          text: '🟢 Готов консультировать (30 мин)',
+          callback_data: 'tarologist_ready'
+        }],
+        [{
+          text: '📊 Мой профиль',
+          callback_data: 'tarologist_info'
+        }]
+      ]
+    },
+    parse_mode: 'Markdown'
+  };
+
+  await callTelegram('sendMessage', {
+    chat_id: chatId,
+    text: menuText,
+    ...keyboard
+  });
+}
+
+/**
+ * Показать меню для таролога
+ */
+async function showTarologistMenu(chatId, tarologist) {
+  const isOnline = Tarologist.isRealOnline(tarologist.id);
+  const balance = Payout.getTarologistBalance(tarologist.id);
+  
+  // Формируем статус
+  let statusEmoji = isOnline ? '🟢' : '🔴';
+  let statusText = isOnline ? 'Онлайн' : 'Оффлайн';
+  
+  // Проверяем активную сессию
+  const db = (await import('./db.js')).default;
+  const activeSession = db.prepare(`
+    SELECT COUNT(*) as count 
+    FROM chat_sessions 
+    WHERE tarologist_id = ? AND active = 1
+  `).get(tarologist.id);
+  
+  let sessionText = '';
+  if (activeSession.count > 0) {
+    sessionText = '\n📱 Активная консультация';
+  }
+  
+  // Проверяем ready_until
+  let readyText = '';
+  if (tarologist.ready_until) {
+    const readyUntil = new Date(tarologist.ready_until);
+    const now = new Date();
+    if (readyUntil > now) {
+      const minutesLeft = Math.ceil((readyUntil - now) / 60000);
+      readyText = `\n⏱️ Готов ещё ${minutesLeft} мин`;
+    }
+  }
+  
+  const menuText = `💼 **Ваш профиль таролога**
+
+👤 Имя: ${tarologist.name}
+${statusEmoji} Статус: ${statusText}${readyText}${sessionText}
+💰 Баланс: ${balance} ⭐
+✨ Консультаций: ${tarologist.sessions_completed || 0}
+⭐ Рейтинг: ${tarologist.rating?.toFixed(1) || '5.0'}
+
+Чтобы получать клиентов, нажмите кнопку ниже:`;
+
+  // Кнопки для таролога
+  const keyboard = {
+    reply_markup: {
+      inline_keyboard: [
+        [{
+          text: '💬 Мои чаты',
+          web_app: { url: `${WEB_APP_URL}/tarologist-chat.html?v=${Date.now()}` }
+        }],
+        [{
+          text: '🟢 Готов консультировать (30 мин)',
+          callback_data: 'tarologist_ready'
+        }],
+        [{
+          text: '📊 Мой профиль',
+          callback_data: 'tarologist_info'
+        }]
+      ]
+    },
+    parse_mode: 'Markdown'
+  };
+
+  await callTelegram('sendMessage', {
+    chat_id: chatId,
+    text: menuText,
     ...keyboard
   });
 }
@@ -131,6 +406,64 @@ async function handleAdmin(chatId) {
 }
 
 async function handleHelp(chatId) {
+  // Проверяем роли пользователя
+  const tarologist = Tarologist.getByTelegramId(chatId.toString());
+  const isAdmin = ADMIN_TELEGRAM_ID && chatId.toString() === ADMIN_TELEGRAM_ID;
+  
+  // Если админ И таролог - специальная справка
+  if (isAdmin && tarologist) {
+    const adminTarologistHelpText = `📖 **Справка для Админа-Таролога**
+
+**Команды таролога:**
+/start — Главное меню со статусом
+/ready (или /готов) — Подтвердить готовность на 30 мин
+/status (или /статус) — Проверить текущий статус
+
+**Команды админа:**
+/admin — Открыть админ-панель
+
+**Как работает онлайн статус:**
+🟢 Клиенты видят вас онлайн, если:
+• Вы нажали "Готов консультировать" (30 мин)
+• У вас есть активная консультация
+• Ваше приложение открыто (heartbeat)
+
+💰 Выплаты производятся по запросу.`;
+
+    await callTelegram('sendMessage', {
+      chat_id: chatId,
+      text: adminTarologistHelpText,
+      parse_mode: 'Markdown'
+    });
+    return;
+  }
+  
+  // Если только таролог
+  if (tarologist) {
+    const tarologistHelpText = `📖 **Справка для таролога**
+
+/start — Главное меню со статусом
+/ready (или /готов) — Подтвердить готовность на 30 мин
+/status (или /статус) — Проверить текущий статус
+/help — Эта справка
+
+**Как работает онлайн статус:**
+🟢 Клиенты видят вас онлайн, если:
+• Вы нажали "Готов консультировать" (30 мин)
+• У вас есть активная консультация
+• Ваше приложение открыто (heartbeat)
+
+💰 Выплаты производятся по запросу администратору.`;
+
+    await callTelegram('sendMessage', {
+      chat_id: chatId,
+      text: tarologistHelpText,
+      parse_mode: 'Markdown'
+    });
+    return;
+  }
+  
+  // Справка для админа/обычного пользователя
   const helpText = `📖 **Справка по командам**
 
 /start — Запустить бота
@@ -143,7 +476,8 @@ async function handleHelp(chatId) {
 • Просматривать все транзакции
 • Отмечать выплаты тарологам
 
-**Важно:** Доступ к админ-панели есть только у владельца бота.`;
+**Для тарологов:**
+Если вы таролог — админ добавит вас в систему, и вы сможете управлять своим статусом через этого бота.`;
 
   await callTelegram('sendMessage', {
     chat_id: chatId,
@@ -238,6 +572,12 @@ async function getUpdates() {
           const [command, ...args] = text.split(' ');
           await handleCommand(chatId, command.toLowerCase(), args);
         }
+        
+        // Обрабатываем успешную оплату (successful_payment)
+        if (update.message.successful_payment) {
+          console.log('💰 BOT: Received successful_payment:', update.message.successful_payment);
+          await handleSuccessfulPayment(update.message);
+        }
       }
       
       // Обрабатываем callback query
@@ -315,6 +655,50 @@ Telegram ID: ${userId}
         text: registrationText
       });
     }
+  }
+
+  if (data === 'tarologist_ready') {
+    // Таролог нажал "Готов консультировать"
+    const tarologist = Tarologist.getByTelegramId(userId.toString());
+    
+    if (!tarologist) {
+      await callTelegram('answerCallbackQuery', {
+        callback_query_id: query.id,
+        text: '❌ Вы не зарегистрированы как таролог',
+        show_alert: true
+      });
+      return;
+    }
+    
+    // Устанавливаем статус готовности (30 минут)
+    Tarologist.setReady(tarologist.id, 30);
+    
+    // ВАЖНО: Перезагружаем данные таролога после обновления!
+    const updatedTarologist = Tarologist.getByTelegramId(userId.toString());
+    
+    // Проверяем, является ли пользователь админом
+    const isAdmin = ADMIN_TELEGRAM_ID && userId.toString() === ADMIN_TELEGRAM_ID;
+    
+    // Отправляем подтверждение
+    await callTelegram('answerCallbackQuery', {
+      callback_query_id: query.id,
+      text: '✅ Вы теперь онлайн! Клиенты могут видеть вас.',
+      show_alert: true
+    });
+    
+    // Обновляем меню с новым статусом (админ-таролог или обычный таролог)
+    if (isAdmin) {
+      await showAdminTarologistMenu(chatId, updatedTarologist);
+    } else {
+      await showTarologistMenu(chatId, updatedTarologist);
+    }
+    
+    // Отправляем уведомление о времени
+    await callTelegram('sendMessage', {
+      chat_id: chatId,
+      text: `🟢 Вы в статусе "онлайн" следующие 30 минут.\n\n💡 Совет: Если клиент выберет вас, вы получите уведомление.\n\n⏰ Статус автоматически сбросится через 30 минут, или вы можете обновить его снова.`,
+      parse_mode: 'Markdown'
+    });
   }
 
   // Отвечаем на callback_query чтобы убрать "часики"

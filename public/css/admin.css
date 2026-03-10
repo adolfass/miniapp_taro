@@ -379,6 +379,48 @@
   white-space: nowrap;
 }
 
+/* Отключенные тарологи */
+.disabled-tarologist {
+  background: linear-gradient(135deg, rgba(100, 100, 100, 0.1) 0%, rgba(100, 100, 100, 0.15) 100%) !important;
+  border-color: rgba(100, 100, 100, 0.3) !important;
+  opacity: 0.7;
+}
+
+.disabled-tarologist:hover {
+  border-color: rgba(100, 100, 100, 0.5) !important;
+  background: linear-gradient(135deg, rgba(100, 100, 100, 0.15) 0%, rgba(100, 100, 100, 0.2) 100%) !important;
+}
+
+.inactive-balance {
+  background: linear-gradient(135deg, #888 0%, #aaa 100%) !important;
+  color: #444 !important;
+}
+
+.inactive-label {
+  color: #ff4444 !important;
+  font-weight: 600;
+}
+
+.status-badge.disabled {
+  background: rgba(255, 68, 68, 0.2);
+  color: #ff4444;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  margin-left: 8px;
+}
+
+/* Кнопка включения */
+.enable-btn {
+  background: rgba(0, 200, 0, 0.2) !important;
+  border-color: rgba(0, 200, 0, 0.5) !important;
+  color: #00c800 !important;
+}
+
+.enable-btn:hover {
+  background: rgba(0, 200, 0, 0.3) !important;
+}
+
 /* Транзакции */
 .transaction-item {
   background: rgba(255, 255, 255, 0.03);
