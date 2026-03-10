@@ -31,7 +31,7 @@
 
 Откройте в браузере:
 ```
-https://api.telegram.org/bot8754564543:AAEoB5HzEyJilZdcdNUPFNgK87aV5aG1LEU/getMe
+https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getMe
 ```
 
 Это вернёт информацию о боте. Для получения вашего ID используйте @userinfobot.
@@ -57,7 +57,7 @@ nano .env
 
 ```bash
 # Telegram Bot Token
-TELEGRAM_BOT_TOKEN=8754564543:AAEoB5HzEyJilZdcdNUPFNgK87aV5aG1LEU
+TELEGRAM_BOT_TOKEN=<YOUR_BOT_TOKEN>
 
 # Telegram Stars provider
 TELEGRAM_PROVIDER_TOKEN=STARS
