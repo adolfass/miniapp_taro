@@ -352,6 +352,17 @@
                     loadChats();
                 }
             });
+            
+            // 🔴 КРИТИЧНО: Ответ на heartbeat от сервера
+            socket.on('tarologist-ping', () => {
+                console.log('💓 Получен ping от сервера, отправляю pong...');
+                socket.emit('tarologist-pong');
+            });
+            
+            // Получаем статус от сервера
+            socket.on('tarologist-status', (data) => {
+                console.log('📊 Статус таролога:', data);
+            });
         }
 
         // Загрузка списка чатов
