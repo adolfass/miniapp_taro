@@ -154,7 +154,7 @@ db.exec(`
 // ========================================
 
 export const Tarologist = {
-  // Получить всех тарологов с рассчитанной ценой
+  // Получить всех активных тарологов с рассчитанной ценой
   getAll() {
     const stmt = db.prepare(`
       SELECT 
@@ -167,8 +167,10 @@ export const Tarologist = {
         sessions_completed,
         telegram_id,
         is_online,
-        last_online_at
+        last_online_at,
+        is_active
       FROM tarologists
+      WHERE is_active = 1
       ORDER BY rating DESC, sessions_completed DESC
     `);
 
@@ -238,6 +240,16 @@ export const Tarologist = {
       WHERE id = ?
     `);
     return stmt.run(isOnline ? 1 : 0, id);
+  },
+
+  // Отключить таролога (не удалять, а скрыть)
+  disable(id) {
+    const stmt = db.prepare(`
+      UPDATE tarologists 
+      SET is_active = 0
+      WHERE id = ?
+    `);
+    return stmt.run(id);
   },
 
   // Получить только онлайн тарологов

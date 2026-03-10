@@ -383,11 +383,8 @@ function renderTarologistsList() {
           <span>💬 ${tarologist.sessions_count || 0}</span>
         </div>
         <div class="tarologist-admin-actions">
-          <button class="tarologist-action-btn toggle-online-btn" data-id="${tarologist.id}" data-online="${tarologist.is_online ? '1' : '0'}">
-            ${tarologist.is_online ? '⚫ В оффлайн' : '🟢 В онлайн'}
-          </button>
           <button class="tarologist-action-btn edit-btn" data-id="${tarologist.id}">✏️ Редактировать</button>
-          <button class="tarologist-action-btn delete-btn" data-id="${tarologist.id}">🗑️ Удалить</button>
+          <button class="tarologist-action-btn disable-btn" data-id="${tarologist.id}">🔕 Отключить</button>
         </div>
       </div>
       <div class="tarologist-admin-balance">${formatNumber(tarologist.balance || 0)} ⭐</div>
@@ -705,33 +702,6 @@ function setupEventListeners() {
     openEditModal();
   });
 
-  // Переключение онлайн статуса
-  document.getElementById('tarologists-admin-list')?.addEventListener('click', async (e) => {
-    if (e.target.closest('.toggle-online-btn')) {
-      const btn = e.target.closest('.toggle-online-btn');
-      const tarologistId = btn.dataset.id;
-      const currentStatus = btn.dataset.online === '1';
-      const newStatus = !currentStatus;
-      
-      try {
-        const response = await fetch(`${API_BASE}/tarologist/${tarologistId}/online`, {
-          method: 'PUT',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ is_online: newStatus })
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to update online status');
-        }
-        
-        showAlert(`Таролог ${newStatus ? 'в онлайн' : 'в оффлайн'}`);
-        await loadTarologists();
-      } catch (error) {
-        showAlert('Ошибка: ' + error.message);
-      }
-    }
-  });
-
   // Редактирование таролога
   document.getElementById('tarologists-admin-list')?.addEventListener('click', (e) => {
     if (e.target.closest('.edit-btn')) {
@@ -743,21 +713,28 @@ function setupEventListeners() {
     }
   });
 
-  // Удаление таролога
-  document.getElementById('tarologists-admin-list')?.addEventListener('click', (e) => {
-    if (e.target.closest('.delete-btn')) {
-      const btn = e.target.closest('.delete-btn');
+  // Отключение таролога
+  document.getElementById('tarologists-admin-list')?.addEventListener('click', async (e) => {
+    if (e.target.closest('.disable-btn')) {
+      const btn = e.target.closest('.disable-btn');
       const tarologist = currentTarologists.find(t => t.id == btn.dataset.id);
       if (tarologist) {
-        if (confirm(`Удалить таролога "${tarologist.name}"?`)) {
-          deleteTarologist(tarologist.id)
-            .then(() => {
-              showAlert('Таролог удалён');
-              loadTarologists();
-            })
-            .catch(error => {
-              showAlert('Ошибка: ' + error.message);
+        if (confirm(`Отключить таролога "${tarologist.name}"?\n\nТаролог не будет отображаться в списке для клиентов.`)) {
+          try {
+            const response = await fetch(`${API_BASE}/tarologist/${tarologist.id}/disable`, {
+              method: 'PUT',
+              headers: getAuthHeaders()
             });
+            
+            if (!response.ok) {
+              throw new Error('Failed to disable tarologist');
+            }
+            
+            showAlert(`Таролог "${tarologist.name}" отключен`);
+            await loadTarologists();
+          } catch (error) {
+            showAlert('Ошибка: ' + error.message);
+          }
         }
       }
     }

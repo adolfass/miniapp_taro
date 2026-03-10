@@ -1778,6 +1778,30 @@ app.put('/api/admin/tarologist/:id/online', isAdmin, (req, res) => {
 });
 
 /**
+ * PUT /api/admin/tarologist/:id/disable
+ * Отключить таролога (не удалять, а скрыть из списка)
+ */
+app.put('/api/admin/tarologist/:id/disable', isAdmin, (req, res) => {
+  try {
+    const tarologistId = req.params.id;
+
+    const tarologist = Tarologist.getById(tarologistId);
+    if (!tarologist) {
+      return res.status(404).json({ success: false, error: 'Таролог не найден' });
+    }
+
+    // Отключаем таролога (не удаляем!)
+    Tarologist.disable(tarologistId);
+
+    console.log(`🔕 Таролог ${tarologistId} (${tarologist.name}) отключен`);
+    res.json({ success: true, message: 'Таролог отключен' });
+  } catch (error) {
+    console.error('Ошибка отключения таролога:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
  * DELETE /api/admin/tarologist/:id
  * Удалить таролога
  */
