@@ -75,6 +75,109 @@
             <div class="stat-label">Возвратов (<span id="total-refunds-amount">0</span> ⭐)</div>
           </div>
         </div>
+
+        <!-- Метрики активности -->
+        <div class="metrics-section">
+          <h3 class="section-title">📈 Активность пользователей</h3>
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-label">DAU</div>
+              <div class="metric-value" id="dau-value">-</div>
+              <div class="metric-sublabel">За сегодня</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">WAU</div>
+              <div class="metric-value" id="wau-value">-</div>
+              <div class="metric-sublabel">За неделю</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">MAU</div>
+              <div class="metric-value" id="mau-value">-</div>
+              <div class="metric-sublabel">За месяц</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Конверсия и воронка -->
+        <div class="metrics-section">
+          <h3 class="section-title">🎯 Конверсия</h3>
+          <div class="conversion-stats">
+            <div class="conversion-item">
+              <span class="conversion-label">Общая конверсия</span>
+              <span class="conversion-value" id="conversion-rate">-%</span>
+            </div>
+            <div class="funnel-steps" id="funnel-steps">
+              <!-- Загружается динамически -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Retention -->
+        <div class="metrics-section">
+          <h3 class="section-title">🔄 Retention</h3>
+          <div class="retention-grid">
+            <div class="retention-item">
+              <div class="retention-day">D1</div>
+              <div class="retention-value" id="retention-d1">-%</div>
+              <div class="retention-bar">
+                <div class="retention-fill" id="retention-d1-bar" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="retention-item">
+              <div class="retention-day">D7</div>
+              <div class="retention-value" id="retention-d7">-%</div>
+              <div class="retention-bar">
+                <div class="retention-fill" id="retention-d7-bar" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="retention-item">
+              <div class="retention-day">D30</div>
+              <div class="retention-value" id="retention-d30">-%</div>
+              <div class="retention-bar">
+                <div class="retention-fill" id="retention-d30-bar" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LTV и финансы -->
+        <div class="metrics-section">
+          <h3 class="section-title">💎 LTV & Финансы</h3>
+          <div class="metrics-grid">
+            <div class="metric-card highlight">
+              <div class="metric-label">LTV</div>
+              <div class="metric-value" id="ltv-value">-</div>
+              <div class="metric-sublabel">⭐ / пользователя</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">ARPPU</div>
+              <div class="metric-value" id="arppu-value">-</div>
+              <div class="metric-sublabel">⭐ / платящий</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Pay Rate</div>
+              <div class="metric-value" id="pay-rate">-%</div>
+              <div class="metric-sublabel">% платящих</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vitality (K-factor) -->
+        <div class="metrics-section">
+          <h3 class="section-title">🚀 Vitality (K-factor)</h3>
+          <div class="vitality-card">
+            <div class="vitality-main">
+              <span class="vitality-label">K =</span>
+              <span class="vitality-value" id="k-factor">-</span>
+              <span class="vitality-status" id="k-status">Загрузка...</span>
+            </div>
+            <div class="vitality-details">
+              <div>Приглашено: <span id="invited-users">-</span></div>
+              <div>Установок: <span id="installed-users">-</span></div>
+              <div>Конверсия: <span id="invite-conversion">-%</span></div>
+            </div>
+          </div>
+        </div>
         
       </div>
       

@@ -62,7 +62,12 @@ async function handleCommand(chatId, command, args) {
     case '/статус':
       await handleStatusCommand(chatId);
       break;
-    
+
+    case '/instructions':
+    case '/инструкции':
+      await handleInstructionsCommand(chatId);
+      break;
+
     default:
       await callTelegram('sendMessage', {
         chat_id: chatId,
@@ -366,8 +371,12 @@ ${statusEmoji} Статус: ${statusText}${readyText}${sessionText}
           callback_data: 'tarologist_ready'
         }],
         [{
-          text: '📊 Мой профиль',
-          callback_data: 'tarologist_info'
+          text: '📋 Инструкции для тарологов',
+          callback_data: 'tarologist_instructions'
+        }],
+        [{
+          text: '✉️ Написать админу',
+          url: `tg://user?id=${ADMIN_TELEGRAM_ID}`
         }]
       ]
     },
@@ -482,6 +491,53 @@ async function handleHelp(chatId) {
   await callTelegram('sendMessage', {
     chat_id: chatId,
     text: helpText,
+    parse_mode: 'Markdown'
+  });
+}
+
+/**
+ * Команда /instructions — Инструкции для тарологов
+ */
+async function handleInstructionsCommand(chatId) {
+  const instructionsText = `📋 **Инструкции для тарологов**
+
+**1. Как зарегистрироваться:**
+• Свяжитесь с администратором @admin
+• Предоставьте ваше имя и фото
+• Админ добавит вас в систему
+• Вы получите уведомление о регистрации
+
+**2. Как начать консультацию:**
+• Нажмите кнопку "🟢 Готов консультировать"
+• Ваш статус станет "онлайн" на 30 минут
+• Клиенты увидят вас в списке доступных тарологов
+• При выборе клиента вы получите уведомление
+• Откройте "💬 Мои чаты" для общения с клиентом
+
+**3. Как работает консультация:**
+• Клиент оплачивает 25 минут (автоматически)
+• Чат открывается сразу после оплаты
+• У вас есть 25 минут на консультацию
+• После окончания клиент может оставить оценку
+• Ваша оценка влияет на позицию в списке
+
+**4. Как получить оплату:**
+• Накапливайте звёзды на балансе
+• Когда решите вывести — нажмите "✉️ Написать админу"
+• Админ проверит ваш баланс и совершит выплату
+• Выплаты производятся в Telegram Stars или другим способом
+
+**5. Важные советы:**
+⭐ Поддерживайте высокий рейтинг — отвечайте быстро и вежливо
+⭐ Будьте онлайн в пиковые часы (вечер, выходные)
+⭐ Не забывайте обновлять статус каждые 30 минут
+⭐ При проблемах пишите администратору
+
+💡 **Удачных консультаций!**`;
+
+  await callTelegram('sendMessage', {
+    chat_id: chatId,
+    text: instructionsText,
     parse_mode: 'Markdown'
   });
 }
@@ -617,6 +673,11 @@ async function handleCallbackQuery(query) {
   const data = query.data;
 
   console.log('🔍 BOT: Processing callback_query:', data, 'for user:', userId);
+
+  if (data === 'tarologist_instructions') {
+    await handleInstructionsCommand(chatId);
+    return;
+  }
 
   if (data === 'tarologist_info') {
     // Проверяем, является ли пользователь тарологом

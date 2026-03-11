@@ -1006,3 +1006,251 @@
   color: var(--text-secondary);
   font-size: 13px;
 }
+
+/* ================================
+   METRICS SECTION
+   ================================ */
+
+.metrics-section {
+  margin: 24px 0;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.metric-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px 12px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.metric-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.metric-card.highlight {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(212, 175, 55, 0.05) 100%);
+  border-color: rgba(212, 175, 55, 0.3);
+}
+
+.metric-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+.metric-sublabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* Conversion Stats */
+.conversion-stats {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.conversion-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.conversion-item:last-child {
+  border-bottom: none;
+}
+
+.conversion-label {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.conversion-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.funnel-steps {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.funnel-step {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.funnel-step-name {
+  color: var(--text-secondary);
+}
+
+.funnel-step-value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Retention Grid */
+.retention-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.retention-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.retention-day {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(212, 175, 55, 0.2);
+  color: var(--gold);
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.retention-value {
+  width: 60px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.retention-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.retention-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold) 0%, var(--gold-light) 100%);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+/* Vitality Card */
+.vitality-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+.vitality-main {
+  margin-bottom: 16px;
+}
+
+.vitality-label {
+  font-size: 18px;
+  color: var(--text-secondary);
+}
+
+.vitality-value {
+  font-size: 42px;
+  font-weight: 700;
+  color: var(--gold);
+  margin: 0 8px;
+}
+
+.vitality-status {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+.vitality-status.good {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.vitality-status.medium {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.vitality-status.bad {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.vitality-details {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.vitality-details span {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .vitality-details {
+    grid-template-columns: 1fr;
+  }
+  
+  .retention-item {
+    flex-wrap: wrap;
+  }
+}

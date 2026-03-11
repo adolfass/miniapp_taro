@@ -144,15 +144,41 @@ export async function init() {
 // ========================================
 async function loadDashboard() {
   try {
-    const response = await fetch(`${API_BASE}/stats`, {
+    // Загружаем основную статистику
+    const statsResponse = await fetch(`${API_BASE}/stats`, {
       headers: getAuthHeaders()
     });
     
-    if (!response.ok) {
+    if (!statsResponse.ok) {
       throw new Error('Ошибка загрузки статистики');
     }
     
-    currentStats = await response.json();
+    currentStats = await statsResponse.json();
+    
+    // Загружаем метрики активности
+    const [dauRes, wauRes, mauRes, funnelRes, conversionRes, ltvRes, retentionRes, vitalityRes] = await Promise.all([
+      fetch(`${API_BASE}/stats/dau?days=1`, { headers: getAuthHeaders() }),
+      fetch(`${API_BASE}/stats/wau?weeks=1`, { headers: getAuthHeaders() }),
+      fetch(`${API_BASE}/stats/mau?months=1`, { headers: getAuthHeaders() }),
+      fetch(`${API_BASE}/stats/funnel?days=30`, { headers: getAuthHeaders() }),
+      fetch(`${API_BASE}/stats/conversion?days=30`, { headers: getAuthHeaders() }),
+      fetch(`${API_BASE}/stats/ltv?days=30`, { headers: getAuthHeaders() }),
+      fetch(`${API_BASE}/stats/retention?cohort_days=30`, { headers: getAuthHeaders() }),
+      fetch(`${API_BASE}/stats/vitality?days=30`, { headers: getAuthHeaders() })
+    ]);
+    
+    // Сохраняем метрики
+    currentStats.metrics = {
+      dau: dauRes.ok ? await dauRes.json() : null,
+      wau: wauRes.ok ? await wauRes.json() : null,
+      mau: mauRes.ok ? await mauRes.json() : null,
+      funnel: funnelRes.ok ? await funnelRes.json() : null,
+      conversion: conversionRes.ok ? await conversionRes.json() : null,
+      ltv: ltvRes.ok ? await ltvRes.json() : null,
+      retention: retentionRes.ok ? await retentionRes.json() : null,
+      vitality: vitalityRes.ok ? await vitalityRes.json() : null
+    };
+    
     updateDashboardUI();
   } catch (error) {
     console.error('Error loading dashboard:', error);
@@ -351,6 +377,90 @@ function updateDashboardUI() {
 
   // Баланс к выплате
   document.getElementById('total-payout').textContent = formatNumber(currentStats.totalPayout || 0);
+
+  // Обновляем метрики
+  updateMetricsUI();
+}
+
+function updateMetricsUI() {
+  if (!currentStats.metrics) return;
+
+  const m = currentStats.metrics;
+
+  // DAU/WAU/MAU
+  if (m.dau?.data?.length > 0) {
+    const dauToday = m.dau.data[m.dau.data.length - 1];
+    document.getElementById('dau-value').textContent = formatNumber(dauToday?.users || 0);
+  }
+  if (m.wau?.data?.length > 0) {
+    const wauThisWeek = m.wau.data[m.wau.data.length - 1];
+    document.getElementById('wau-value').textContent = formatNumber(wauThisWeek?.users || 0);
+  }
+  if (m.mau?.data?.length > 0) {
+    const mauThisMonth = m.mau.data[m.mau.data.length - 1];
+    document.getElementById('mau-value').textContent = formatNumber(mauThisMonth?.users || 0);
+  }
+
+  // Конверсия
+  if (m.conversion?.data) {
+    document.getElementById('conversion-rate').textContent = (m.conversion.data.conversion_rate || 0) + '%';
+  }
+
+  // Воронка
+  if (m.funnel?.data?.funnel) {
+    const funnel = m.funnel.data.funnel;
+    const funnelEl = document.getElementById('funnel-steps');
+    if (funnelEl) {
+      funnelEl.innerHTML = `
+        <div class="funnel-step"><span class="funnel-step-name">Открыли приложение</span><span class="funnel-step-value">${formatNumber(funnel.app_open || 0)}</span></div>
+        <div class="funnel-step"><span class="funnel-step-name">Выбрали расклад</span><span class="funnel-step-value">${formatNumber(funnel.spread_selected || 0)}</span></div>
+        <div class="funnel-step"><span class="funnel-step-name">Перевернули карты</span><span class="funnel-step-value">${formatNumber(funnel.cards_flipped || 0)}</span></div>
+        <div class="funnel-step"><span class="funnel-step-name">Оплатили</span><span class="funnel-step-value">${formatNumber(funnel.payment_completed || 0)}</span></div>
+      `;
+    }
+  }
+
+  // Retention
+  if (m.retention?.data?.retention) {
+    const r = m.retention.data.retention;
+    document.getElementById('retention-d1').textContent = (r.D1 || 0) + '%';
+    document.getElementById('retention-d7').textContent = (r.D7 || 0) + '%';
+    document.getElementById('retention-d30').textContent = (r.D30 || 0) + '%';
+    
+    document.getElementById('retention-d1-bar').style.width = Math.min(r.D1 || 0, 100) + '%';
+    document.getElementById('retention-d7-bar').style.width = Math.min(r.D7 || 0, 100) + '%';
+    document.getElementById('retention-d30-bar').style.width = Math.min(r.D30 || 0, 100) + '%';
+  }
+
+  // LTV
+  if (m.ltv?.data) {
+    document.getElementById('ltv-value').textContent = formatNumber(m.ltv.data.ltv || 0);
+    document.getElementById('arppu-value').textContent = formatNumber(m.ltv.data.arppu || 0);
+    document.getElementById('pay-rate').textContent = (m.ltv.data.paying_rate || 0) + '%';
+  }
+
+  // Vitality (K-factor)
+  if (m.vitality?.data) {
+    const k = m.vitality.data.k_factor || 0;
+    document.getElementById('k-factor').textContent = k.toFixed(2);
+    document.getElementById('invited-users').textContent = formatNumber(m.vitality.data.invited_users || 0);
+    document.getElementById('installed-users').textContent = formatNumber(m.vitality.data.installed_from_invite || 0);
+    document.getElementById('invite-conversion').textContent = (m.vitality.data.conversion_rate || 0) + '%';
+    
+    const statusEl = document.getElementById('k-status');
+    if (statusEl) {
+      if (k > 1) {
+        statusEl.textContent = '🚀 Вирусный рост!';
+        statusEl.className = 'vitality-status good';
+      } else if (k > 0.5) {
+        statusEl.textContent = '✅ Хороший рост';
+        statusEl.className = 'vitality-status medium';
+      } else {
+        statusEl.textContent = '⚠️ Нужны улучшения';
+        statusEl.className = 'vitality-status bad';
+      }
+    }
+  }
 }
 
 function renderTarologistsList() {
