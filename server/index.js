@@ -88,9 +88,16 @@ app.use('/api', apiRouter);
 // Bot Webhook
 // ========================================
 
-app.post('/api/bot/webhook', (req, res) => {
-  handleWebhook(req.body);
-  res.json({ ok: true });
+app.post('/api/bot/webhook', async (req, res) => {
+  try {
+    console.log('📨 Webhook received:', JSON.stringify(req.body).substring(0, 200));
+    await handleWebhook(req.body);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('❌ Webhook error:', error);
+    // Всё равно возвращаем 200, чтобы Telegram не ретраил
+    res.json({ ok: false, error: error.message });
+  }
 });
 
 // ========================================

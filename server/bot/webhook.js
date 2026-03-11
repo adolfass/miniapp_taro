@@ -7,10 +7,12 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import db from '../db.js';
 import { processPayment } from '../services/payment-service.js';
+import adminBot from '../admin-bot.js';
 
 dotenv.config();
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const { handleCommand: handleAdminBotCommand } = adminBot;
 
 /**
  * Обработать webhook update от Telegram
@@ -70,8 +72,10 @@ async function handleCommand(message) {
   
   console.log('🤖 Command:', text, 'from:', chatId);
   
-  // Здесь можно добавить обработку команд
-  // Например, интеграция с admin-bot.js
+  // Передаём команду в admin-bot.js для обработки
+  const args = text.split(' ');
+  const command = args[0];
+  await handleAdminBotCommand(chatId, command, args.slice(1));
 }
 
 /**
