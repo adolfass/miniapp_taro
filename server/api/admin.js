@@ -4,11 +4,10 @@
  */
 
 import express from 'express';
-import db from '../db.js';
+import db, { Tarologist, Transaction, Payout, ChatSession } from '../db.js';
 import { isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
-const { Tarologist, Transaction, Payout, ChatSession } = db;
 
 // ========================================
 // Статистика

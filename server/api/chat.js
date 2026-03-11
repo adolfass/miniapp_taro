@@ -4,12 +4,11 @@
  */
 
 import express from 'express';
-import db from '../db.js';
+import { ChatSession, Message } from '../db.js';
 import { isTarologist } from '../middleware/auth.js';
 import { autoCloseSessions } from '../middleware/auto-close.js';
 
 const router = express.Router();
-const { ChatSession, Message } = db;
 
 /**
  * GET /api/session/:id/status

@@ -6,10 +6,9 @@
 import express from 'express';
 import { createInvoice, processPayment, refund } from '../services/payment-service.js';
 import { isAdmin } from '../middleware/auth.js';
-import db from '../db.js';
+import { Transaction, Payout, Tarologist, User } from '../db.js';
 
 const router = express.Router();
-const { Transaction, Payout } = db;
 
 /**
  * POST /api/create-invoice
@@ -26,7 +25,7 @@ router.post('/create-invoice', async (req, res) => {
       });
     }
     
-    const tarologist = db.Tarologist.getById(tarologistId);
+    const tarologist = Tarologist.getById(tarologistId);
     
     if (!tarologist) {
       return res.status(404).json({

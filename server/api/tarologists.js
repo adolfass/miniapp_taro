@@ -4,12 +4,11 @@
  */
 
 import express from 'express';
-import db from '../db.js';
+import { Tarologist } from '../db.js';
 import { isTarologist, isAdmin } from '../middleware/auth.js';
 import { autoCloseSessions } from '../middleware/auto-close.js';
 
 const router = express.Router();
-const { Tarologist } = db;
 
 /**
  * GET /api/tarologists

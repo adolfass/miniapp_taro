@@ -3,10 +3,8 @@
  * Обработка WebSocket соединений для чата и онлайн статуса
  */
 
-import db from '../db.js';
+import { Tarologist, ChatSession, Message } from '../db.js';
 import { validateTelegramData } from '../middleware/auth.js';
-
-const { Tarologist, ChatSession, Message } = db;
 
 /**
  * Инициализация WebSocket
