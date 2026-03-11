@@ -544,6 +544,106 @@ app.get('/api/session/:id/messages', (req, res) => {
   }
 });
 
+/**
+ * GET /api/session/:id/status
+ * Получить статус сессии (время до закрытия, можно ли оценить)
+ * ADR-003: Session Lifecycle Management
+ */
+app.get('/api/session/:id/status', (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    const session = ChatSession.getById(sessionId);
+    
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Session not found' });
+    }
+    
+    // Автоматически закрываем просроченные сессии
+    ChatSession.autoCloseOldSessions();
+    
+    // Перезагружаем сессию после возможного закрытия
+    const updatedSession = ChatSession.getById(sessionId);
+    
+    // Вычисляем оставшееся время
+    let timeLeft = 0;
+    let timeLeftSeconds = 0;
+    if (updatedSession.active) {
+      const startTime = new Date(updatedSession.start_time).getTime();
+      const now = Date.now();
+      const elapsed = (now - startTime) / 1000;
+      timeLeftSeconds = Math.max(0, updatedSession.duration_seconds - elapsed);
+      timeLeft = Math.ceil(timeLeftSeconds / 60); // в минутах
+    }
+    
+    // Проверяем, можно ли оценить (в течение 24 часов после закрытия)
+    const canRate = ChatSession.canRate(sessionId);
+    
+    res.json({
+      success: true,
+      data: {
+        id: updatedSession.id,
+        is_active: updatedSession.active === 1,
+        is_completed: updatedSession.completed === 1,
+        is_rated: updatedSession.rated === 1,
+        can_rate: canRate,
+        time_left_minutes: timeLeft,
+        time_left_seconds: timeLeftSeconds,
+        duration_seconds: updatedSession.duration_seconds,
+        start_time: updatedSession.start_time,
+        end_time: updatedSession.end_time,
+        tarologist_id: updatedSession.tarologist_id,
+        user_id: updatedSession.user_id
+      }
+    });
+  } catch (error) {
+    console.error('Error getting session status:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/session/:id/rate
+ * Сохранить оценку сессии
+ * ADR-003: Session Lifecycle Management
+ */
+app.post('/api/session/:id/rate', (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    const { rating, comment } = req.body;
+    
+    // Валидация
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, error: 'Rating must be between 1 and 5' });
+    }
+    
+    // Проверяем, можно ли оценить
+    if (!ChatSession.canRate(sessionId)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Session cannot be rated (already rated, not completed, or rating period expired)' 
+      });
+    }
+    
+    // Сохраняем оценку
+    const updatedSession = ChatSession.submitRating(sessionId, rating, comment);
+    
+    res.json({
+      success: true,
+      data: {
+        session_id: updatedSession.id,
+        rated: true,
+        rating: updatedSession.rating,
+        rating_comment: updatedSession.rating_comment,
+        rated_at: updatedSession.rated_at,
+        message: 'Thank you for your feedback!'
+      }
+    });
+  } catch (error) {
+    console.error('Error submitting rating:', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+  }
+});
+
 // ========================================
 // Public API Routes
 // ========================================
@@ -780,6 +880,21 @@ async function isTarologist(req, res, next) {
 }
 
 /**
+ * Middleware для автоматического закрытия просроченных сессий
+ * ADR-003: Session Lifecycle Management
+ */
+function autoCloseSessions(req, res, next) {
+  try {
+    // Автоматически закрываем сессии старше 25 минут
+    ChatSession.autoCloseOldSessions();
+    next();
+  } catch (error) {
+    console.error('Error in autoCloseSessions middleware:', error);
+    next(); // Продолжаем даже при ошибке
+  }
+}
+
+/**
  * GET /api/tarologist/me
  * Получить данные текущего таролога
  */
@@ -791,7 +906,7 @@ app.get('/api/tarologist/me', isTarologist, (req, res) => {
  * GET /api/tarologist/sessions/active
  * Получить активные сессии таролога
  */
-app.get('/api/tarologist/sessions/active', isTarologist, (req, res) => {
+app.get('/api/tarologist/sessions/active', isTarologist, autoCloseSessions, (req, res) => {
   try {
     const sessions = ChatSession.getActiveByTarologist(req.tarologist.id);
     res.json({ success: true, data: sessions });
@@ -805,7 +920,7 @@ app.get('/api/tarologist/sessions/active', isTarologist, (req, res) => {
  * GET /api/chat/session/:id/messages
  * Получить сообщения сессии
  */
-app.get('/api/chat/session/:id/messages', isTarologist, (req, res) => {
+app.get('/api/chat/session/:id/messages', isTarologist, autoCloseSessions, (req, res) => {
   try {
     const sessionId = req.params.id;
     

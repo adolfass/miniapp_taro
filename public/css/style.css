@@ -2114,3 +2114,99 @@ input:checked + .slider:before {
   transform: scale(1.05);
   box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
 }
+
+/* ========================================
+   МОДАЛЬНОЕ ОКНО ОЦЕНКИ КОНСУЛЬТАЦИИ
+   ======================================== */
+
+.modal-rating {
+  text-align: center;
+  max-width: 400px;
+}
+
+.rating-text {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 12px 0 20px;
+}
+
+.rating-stars {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 20px 0;
+}
+
+.rating-stars .star {
+  font-size: 32px;
+  cursor: pointer;
+  opacity: 0.3;
+  transition: all 0.2s ease;
+}
+
+.rating-stars .star:hover,
+.rating-stars .star.active {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+.rating-comment {
+  margin: 20px 0;
+}
+
+.rating-comment textarea {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.rating-comment textarea:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.rating-comment textarea::placeholder {
+  color: var(--text-secondary);
+}
+
+.rating-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.rating-actions .modal-close {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--text-secondary);
+  color: var(--text-secondary);
+}
+
+.rating-actions .modal-close:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.rating-actions .submit-rating-btn {
+  flex: 1;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+  border: none;
+  color: #1a0b2e;
+  font-weight: 600;
+}
+
+.rating-actions .submit-rating-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rating-actions .submit-rating-btn:not(:disabled):hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
+}

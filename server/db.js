@@ -199,6 +199,43 @@ try {
   // Колонка уже существует
 }
 
+// Миграции для системы оценок сессий (ADR-003)
+try {
+  db.exec(`
+    ALTER TABLE chat_sessions ADD COLUMN rated BOOLEAN DEFAULT 0;
+  `);
+  console.log('✅ Добавлена колонка rated в chat_sessions');
+} catch (e) {
+  // Колонка уже существует
+}
+
+try {
+  db.exec(`
+    ALTER TABLE chat_sessions ADD COLUMN rating INTEGER;
+  `);
+  console.log('✅ Добавлена колонка rating в chat_sessions');
+} catch (e) {
+  // Колонка уже существует
+}
+
+try {
+  db.exec(`
+    ALTER TABLE chat_sessions ADD COLUMN rating_comment TEXT;
+  `);
+  console.log('✅ Добавлена колонка rating_comment в chat_sessions');
+} catch (e) {
+  // Колонка уже существует
+}
+
+try {
+  db.exec(`
+    ALTER TABLE chat_sessions ADD COLUMN rated_at DATETIME;
+  `);
+  console.log('✅ Добавлена колонка rated_at в chat_sessions');
+} catch (e) {
+  // Колонка уже существует
+}
+
 // ========================================
 // Модели
 // ========================================
@@ -489,11 +526,13 @@ export const Tarologist = {
       }
     }
     
-    // 4. Проверка активной сессии чата
+    // 4. Проверка активной сессии чата (ТОЛЬКО если сессия не старше 25 минут)
     const activeSession = db.prepare(`
       SELECT COUNT(*) as count 
       FROM chat_sessions 
-      WHERE tarologist_id = ? AND active = 1
+      WHERE tarologist_id = ? 
+        AND active = 1
+        AND datetime(start_time, '+25 minutes') > datetime('now')
     `).get(id);
     
     if (activeSession.count > 0) {
@@ -749,6 +788,95 @@ export const ChatSession = {
       LIMIT 1
     `);
     return stmt.get(userId, tarologistId);
+  },
+
+  // Автоматически закрыть сессии старше 25 минут (ADR-003)
+  autoCloseOldSessions() {
+    const stmt = db.prepare(`
+      UPDATE chat_sessions 
+      SET active = 0, 
+          completed = 1, 
+          end_time = datetime(start_time, '+25 minutes'),
+          rated = 0
+      WHERE active = 1 
+        AND datetime(start_time, '+25 minutes') <= datetime('now')
+    `);
+    const result = stmt.run();
+    
+    if (result.changes > 0) {
+      console.log(`✅ Auto-closed ${result.changes} expired session(s)`);
+    }
+    
+    return result.changes;
+  },
+
+  // Сохранить оценку сессии (ADR-003)
+  submitRating(sessionId, rating, comment = null) {
+    // Валидация
+    if (!rating || rating < 1 || rating > 5) {
+      throw new Error('Rating must be between 1 and 5');
+    }
+
+    const stmt = db.prepare(`
+      UPDATE chat_sessions 
+      SET rated = 1,
+          rating = ?,
+          rating_comment = ?,
+          rated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND active = 0 AND completed = 1
+    `);
+    
+    const result = stmt.run(rating, comment, sessionId);
+    
+    if (result.changes === 0) {
+      throw new Error('Session not found or not completed');
+    }
+
+    // Обновляем статистику таролога
+    const session = this.getById(sessionId);
+    if (session) {
+      const tarologistStmt = db.prepare(`
+        UPDATE tarologists 
+        SET rating = ((rating * total_ratings) + ?) / (total_ratings + 1),
+            total_ratings = total_ratings + 1
+        WHERE id = ?
+      `);
+      tarologistStmt.run(rating, session.tarologist_id);
+    }
+
+    return this.getById(sessionId);
+  },
+
+  // Получить сессии без оценки для таролога (для статистики)
+  getUnratedSessions(tarologistId) {
+    const stmt = db.prepare(`
+      SELECT * FROM chat_sessions
+      WHERE tarologist_id = ? 
+        AND active = 0 
+        AND completed = 1 
+        AND rated = 0
+      ORDER BY end_time DESC
+    `);
+    return stmt.all(tarologistId);
+  },
+
+  // Проверить, можно ли оценить сессию (в течение 24 часов после закрытия)
+  canRate(sessionId) {
+    const stmt = db.prepare(`
+      SELECT 
+        CASE 
+          WHEN active = 0 
+               AND completed = 1 
+               AND rated = 0 
+               AND datetime(end_time, '+24 hours') > datetime('now')
+          THEN 1 
+          ELSE 0 
+        END as can_rate
+      FROM chat_sessions
+      WHERE id = ?
+    `);
+    const result = stmt.get(sessionId);
+    return result ? result.can_rate === 1 : false;
   }
 };
 

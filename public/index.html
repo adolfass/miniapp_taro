@@ -336,6 +336,38 @@
         </button>
       </div>
     </div>
+
+    <!-- ========================================
+         МОДАЛЬНОЕ ОКНО ОЦЕНКИ КОНСУЛЬТАЦИИ
+         ======================================== -->
+    <div class="modal" id="rating-modal">
+      <div class="modal-content modal-rating">
+        <h3 class="modal-title">Оцените консультацию</h3>
+        <p class="rating-text">
+          Ваша оценка поможет нам стать лучше
+        </p>
+        <div class="rating-stars" id="rating-stars">
+          <span class="star" data-rating="1">⭐</span>
+          <span class="star" data-rating="2">⭐</span>
+          <span class="star" data-rating="3">⭐</span>
+          <span class="star" data-rating="4">⭐</span>
+          <span class="star" data-rating="5">⭐</span>
+        </div>
+        <div class="rating-comment">
+          <textarea 
+            id="rating-comment" 
+            placeholder="Ваш отзыв (необязательно)..."
+            rows="3"
+          ></textarea>
+        </div>
+        <div class="rating-actions">
+          <button class="modal-close" id="skip-rating-btn">Пропустить</button>
+          <button class="modal-close submit-rating-btn" id="submit-rating-btn" disabled>
+            Отправить
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="main-app/main.js?v=202603080101"></script>

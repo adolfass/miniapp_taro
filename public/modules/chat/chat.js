@@ -31,12 +31,12 @@ const chatStatus = document.getElementById('chat-status');
 const timerValue = document.getElementById('timer-value');
 const chatTimer = document.getElementById('chat-timer');
 
-// Экран оценки
-const screenRating = document.getElementById('screen-rating');
-const starsRating = document.getElementById('stars-rating');
-const selectedRatingText = document.getElementById('selected-rating-text');
-const submitRatingBtn = document.getElementById('submit-rating-btn');
-const backToMainRatingBtn = document.getElementById('back-to-main-rating-btn');
+// Модальное окно оценки
+const ratingModal = document.getElementById('rating-modal');
+const ratingStars = document.getElementById('rating-stars');
+const ratingComment = document.getElementById('rating-comment');
+const skipRatingBtn = document.getElementById('skip-rating-btn');
+const submitRatingModalBtn = document.getElementById('submit-rating-btn');
 
 // Кнопка отправки расклада
 const shareSpreadBtn = document.getElementById('share-spread-btn');
@@ -423,14 +423,14 @@ function handleSessionExpired() {
 
   addSystemMessage('⏰ Время консультации вышло');
 
-  // Через 3 секунды переходим к оценке
+  // Через 3 секунды показываем модальное окно оценки
   setTimeout(() => {
-    showRatingScreen();
+    showRatingModal();
   }, 3000);
 }
 
-function showRatingScreen() {
-  switchScreen('rating');
+function showRatingModal() {
+  ratingModal.classList.add('active');
   resetRating();
 }
 
@@ -439,29 +439,30 @@ function showRatingScreen() {
 // ========================================
 function setupRatingListeners() {
   // Выбор звёзд
-  const starBtns = starsRating.querySelectorAll('.star-btn');
+  const stars = ratingStars?.querySelectorAll('.star');
 
-  starBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const rating = parseInt(btn.dataset.rating);
+  stars?.forEach(star => {
+    star.addEventListener('click', () => {
+      const rating = parseInt(star.dataset.rating);
       selectRating(rating);
     });
 
-    btn.addEventListener('mouseenter', () => {
-      const rating = parseInt(btn.dataset.rating);
+    star.addEventListener('mouseenter', () => {
+      const rating = parseInt(star.dataset.rating);
       highlightStars(rating);
     });
   });
 
-  starsRating.addEventListener('mouseleave', () => {
+  ratingStars?.addEventListener('mouseleave', () => {
     highlightStars(selectedRating);
   });
 
   // Отправка оценки
-  submitRatingBtn?.addEventListener('click', submitRating);
+  submitRatingModalBtn?.addEventListener('click', submitRating);
 
-  // Возврат к раскладам
-  backToMainRatingBtn?.addEventListener('click', () => {
+  // Пропустить оценку
+  skipRatingBtn?.addEventListener('click', () => {
+    closeRatingModal();
     switchScreen('main');
   });
 }
@@ -470,24 +471,18 @@ function selectRating(rating) {
   selectedRating = rating;
   highlightStars(rating);
 
-  // Обновляем текст
-  const ratingTexts = ['', 'Ужасно', 'Плохо', 'Нормально', 'Хорошо', 'Отлично'];
-  selectedRatingText.textContent = ratingTexts[rating];
-
   // Активируем кнопку
-  submitRatingBtn.disabled = false;
+  submitRatingModalBtn.disabled = false;
 }
 
 function highlightStars(rating) {
-  const starBtns = starsRating.querySelectorAll('.star-btn');
+  const stars = ratingStars?.querySelectorAll('.star');
 
-  starBtns.forEach((btn, index) => {
+  stars?.forEach((star, index) => {
     if (index < rating) {
-      btn.textContent = '★';
-      btn.classList.add('filled');
+      star.classList.add('active');
     } else {
-      btn.textContent = '☆';
-      btn.classList.remove('filled');
+      star.classList.remove('active');
     }
   });
 }
@@ -495,42 +490,48 @@ function highlightStars(rating) {
 function resetRating() {
   selectedRating = 0;
   highlightStars(0);
-  selectedRatingText.textContent = '';
-  submitRatingBtn.disabled = true;
-  backToMainRatingBtn.style.display = 'none';
+  if (ratingComment) ratingComment.value = '';
+  submitRatingModalBtn.disabled = true;
+}
+
+function closeRatingModal() {
+  ratingModal.classList.remove('active');
+  
+  // Закрываем WebSocket
+  if (socket) {
+    socket.close();
+  }
 }
 
 async function submitRating() {
   if (selectedRating < 1) return;
 
   try {
-    if (import.meta?.env?.DEV) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      console.log(`Оценка отправлена: ${selectedRating}`);
-    } else {
-      await fetch('/api/rate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          tarologistId: currentTarologist.id,
-          userId: tg.initDataUnsafe?.user?.id,
-          rating: selectedRating,
-          sessionId: currentSession.id
-        })
-      });
+    const comment = ratingComment?.value?.trim() || null;
+    
+    // Отправляем оценку на сервер
+    const response = await fetch(`/api/session/${currentSession.id}/rate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': tg.initData || ''
+      },
+      body: JSON.stringify({
+        rating: selectedRating,
+        comment: comment
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to submit rating');
     }
 
+    // Закрываем модальное окно и возвращаемся на главный экран
+    closeRatingModal();
+    switchScreen('main');
+    
     // Показываем благодарность
-    selectedRatingText.textContent = 'Спасибо за оценку!';
-    submitRatingBtn.style.display = 'none';
-    backToMainRatingBtn.style.display = 'block';
-
-    // Закрываем WebSocket
-    if (socket) {
-      socket.close();
-    }
+    tg.showAlert('Спасибо за оценку!');
 
   } catch (error) {
     console.error('Ошибка отправки оценки:', error);

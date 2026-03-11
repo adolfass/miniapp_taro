@@ -21,7 +21,6 @@ let currentTransactions = [];
 let currentPayouts = [];
 let currentRefundableTransactions = [];
 let selectedTarologistId = null;
-let selectedPayoutId = null;
 let selectedRefundTransaction = null;
 let currentTab = 'statistics';
 
@@ -33,7 +32,6 @@ let screens = null;
 let navButtons = null;
 let backButtons = null;
 let tarologistModal = null;
-let payoutConfirmModal = null;
 let tarologistEditModal = null;
 let refundModal = null;
 let tabButtons = null;
@@ -96,7 +94,6 @@ export async function init() {
   };
 
   tarologistModal = document.getElementById('tarologist-modal');
-  payoutConfirmModal = document.getElementById('payout-confirm-modal');
   tarologistEditModal = document.getElementById('tarologist-edit-modal');
   refundModal = document.getElementById('refund-modal');
 
@@ -537,49 +534,9 @@ function closeTarologistModal() {
   selectedTarologistId = null;
 }
 
-function openPayoutConfirm(tarologist, amount) {
-  selectedPayoutId = tarologist.id;
-  
-  document.getElementById('confirm-amount').textContent = formatNumber(amount);
-  document.getElementById('confirm-name').textContent = tarologist.name;
-  
-  payoutConfirmModal.classList.add('active');
-}
-
-function closePayoutConfirm() {
-  payoutConfirmModal.classList.remove('active');
-  selectedPayoutId = null;
-}
-
 // ========================================
 // API запросы
 // ========================================
-async function markPayout(tarologistId, amount) {
-  try {
-    const response = await fetch(`${API_BASE}/payouts`, {
-      method: 'POST',
-      headers: {
-        ...getAuthHeaders(),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        tarologist_id: tarologistId,
-        amount: amount
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Ошибка создания выплаты');
-    }
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.error('Error marking payout:', error);
-    throw error;
-  }
-}
 
 async function saveTarologist(data) {
   const url = data.id 
@@ -814,44 +771,10 @@ function setupEventListeners() {
   // Закрытие модального окна таролога
   document.getElementById('close-modal-btn')?.addEventListener('click', closeTarologistModal);
   
-  // Отметить выплату
-  document.getElementById('mark-payout-btn')?.addEventListener('click', async () => {
-    const tarologist = currentTarologists.find(t => t.id === selectedTarologistId);
-    if (!tarologist || !tarologist.balance) {
-      showAlert('Нет баланса для выплаты');
-      return;
-    }
-    
-    openPayoutConfirm(tarologist, tarologist.balance);
-    closeTarologistModal();
-  });
-  
-  // Отмена выплаты
-  document.getElementById('cancel-payout-btn')?.addEventListener('click', closePayoutConfirm);
-  
-  // Подтверждение выплаты
-  document.getElementById('confirm-payout-btn')?.addEventListener('click', async () => {
-    const tarologist = currentTarologists.find(t => t.id === selectedPayoutId);
-    if (!tarologist) return;
-    
-    try {
-      await markPayout(tarologist.id, tarologist.balance);
-      showAlert('Выплата отмечена!');
-      closePayoutConfirm();
-      await loadTarologists();
-      await loadDashboard();
-    } catch (error) {
-      showAlert('Ошибка: ' + error.message);
-    }
-  });
-  
   // Закрытие по клику вне модального окна
   window.addEventListener('click', (e) => {
     if (e.target === tarologistModal) {
       closeTarologistModal();
-    }
-    if (e.target === payoutConfirmModal) {
-      closePayoutConfirm();
     }
     if (e.target === tarologistEditModal) {
       closeEditModal();
