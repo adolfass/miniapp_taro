@@ -951,3 +951,58 @@
   background: rgba(76, 175, 80, 0.25);
   border-color: rgba(76, 175, 80, 0.5);
 }
+
+/* Список сессий без оценки */
+.unrated-sessions-section {
+  margin: 20px 0;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.unrated-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 12px 0;
+}
+
+.unrated-title span {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.unrated-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.unrated-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.unrated-item:last-child {
+  border-bottom: none;
+}
+
+.unrated-client {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.unrated-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.unrated-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}

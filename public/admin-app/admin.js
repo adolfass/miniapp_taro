@@ -517,7 +517,7 @@ function renderRefundableTransactionsList() {
 // ========================================
 // Модальные окна
 // ========================================
-function openTarologistModal(tarologist) {
+async function openTarologistModal(tarologist) {
   selectedTarologistId = tarologist.id;
   
   document.getElementById('modal-tarologist-name').textContent = tarologist.name;
@@ -526,7 +526,50 @@ function openTarologistModal(tarologist) {
   document.getElementById('modal-tarologist-rating').textContent = tarologist.rating?.toFixed(1) || '0.0';
   document.getElementById('modal-tarologist-total').textContent = `${formatNumber(tarologist.total_earned || 0)} ⭐`;
   
+  // Загружаем сессии без оценки
+  await loadUnratedSessions(tarologist.id);
+  
   tarologistModal.classList.add('active');
+}
+
+async function loadUnratedSessions(tarologistId) {
+  try {
+    const response = await fetch(`${API_BASE}/tarologist/${tarologistId}/unrated-sessions`, {
+      headers: getAuthHeaders()
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to load unrated sessions');
+    }
+    
+    const result = await response.json();
+    const sessions = result.data || [];
+    
+    // Обновляем счетчик
+    document.getElementById('modal-unrated-count').textContent = sessions.length;
+    
+    // Отображаем список
+    const container = document.getElementById('modal-unrated-list');
+    
+    if (sessions.length === 0) {
+      container.innerHTML = '<div class="unrated-empty">Все сессии оценены ✨</div>';
+      return;
+    }
+    
+    container.innerHTML = sessions.map(session => `
+      <div class="unrated-item">
+        <div>
+          <div class="unrated-client">Клиент #${session.user_id}</div>
+          <div class="unrated-date">${formatDate(session.end_time || session.start_time)}</div>
+        </div>
+      </div>
+    `).join('');
+    
+  } catch (error) {
+    console.error('Error loading unrated sessions:', error);
+    document.getElementById('modal-unrated-count').textContent = '?';
+    document.getElementById('modal-unrated-list').innerHTML = '<div class="unrated-empty">Ошибка загрузки</div>';
+  }
 }
 
 function closeTarologistModal() {

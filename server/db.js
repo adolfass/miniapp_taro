@@ -860,7 +860,7 @@ export const ChatSession = {
     return stmt.all(tarologistId);
   },
 
-  // Проверить, можно ли оценить сессию (в течение 24 часов после закрытия)
+  // Проверить, можно ли оценить сессию (только если завершена и не оценена)
   canRate(sessionId) {
     const stmt = db.prepare(`
       SELECT 
@@ -868,7 +868,6 @@ export const ChatSession = {
           WHEN active = 0 
                AND completed = 1 
                AND rated = 0 
-               AND datetime(end_time, '+24 hours') > datetime('now')
           THEN 1 
           ELSE 0 
         END as can_rate

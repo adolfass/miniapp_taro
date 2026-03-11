@@ -26,7 +26,7 @@ import db, {
   calculatePrice,
   initializeTestData
 } from './db.js';
-import adminBot from './admin-bot.js';
+import adminBot, { notifyTarologistAboutRating } from './admin-bot.js';
 const { handleWebhookUpdate, handleCommand, startBot } = adminBot;
 
 // Запускаем бота только если нет webhook
@@ -1564,6 +1564,25 @@ app.get('/api/admin/tarologist/:id', isAdmin, (req, res) => {
     });
   } catch (error) {
     console.error('Get tarologist error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/tarologist/:id/unrated-sessions
+ * Получить список сессий без оценки для таролога
+ */
+app.get('/api/admin/tarologist/:id/unrated-sessions', isAdmin, (req, res) => {
+  try {
+    const tarologistId = parseInt(req.params.id);
+    const sessions = ChatSession.getUnratedSessions(tarologistId);
+    
+    res.json({
+      success: true,
+      data: sessions
+    });
+  } catch (error) {
+    console.error('Get unrated sessions error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

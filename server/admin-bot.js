@@ -749,9 +749,39 @@ async function startBot() {
   getUpdates();
 }
 
+// ========================================
+// Уведомления тарологам
+// ========================================
+
+/**
+ * Отправить уведомление о новой оценке тарологу
+ * @param {string} telegramId - Telegram ID таролога
+ * @param {Object} data - Данные об оценке
+ * @param {number} data.rating - Оценка (1-5)
+ * @param {string} data.comment - Комментарий (может быть null)
+ * @param {string} data.userName - Имя пользователя
+ * @param {number} data.sessionId - ID сессии
+ */
+export async function notifyTarologistAboutRating(telegramId, data) {
+  const { rating, comment, userName, sessionId } = data;
+  
+  const stars = '⭐'.repeat(rating);
+  const commentText = comment ? ` и оставил комментарий: "${comment}"` : '';
+  
+  const message = `⭐️ Новая оценка!\n\n` +
+    `Пользователь ${userName} поставил вам ${rating} ${stars}${commentText}\n\n` +
+    `Сессия: #${sessionId}`;
+  
+  await callTelegram('sendMessage', {
+    chat_id: telegramId,
+    text: message,
+    parse_mode: 'HTML'
+  });
+}
+
 // Запускаем если файл запущен напрямую
 if (process.argv[1]?.endsWith('admin-bot.js')) {
   startBot();
 }
 
-export default { startBot, setupBotWebhook, handleWebhookUpdate, handleCommand };
+export default { startBot, setupBotWebhook, handleWebhookUpdate, handleCommand, notifyTarologistAboutRating };
