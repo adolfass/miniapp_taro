@@ -4,14 +4,13 @@
  * ADR-003: Session Lifecycle Management
  */
 
-import db from '../db.js';
+import { ChatSession } from '../db.js';
 
 /**
  * Middleware для автоматического закрытия просроченных сессий
  */
 export function autoCloseSessions(req, res, next) {
   try {
-    const { ChatSession } = db;
     // Автоматически закрываем сессии старше 25 минут
     ChatSession.autoCloseOldSessions();
     next();
