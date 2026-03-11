@@ -400,6 +400,11 @@ function revealDailyCard(index) {
   const cardEl = document.querySelector(`#daily-cards .card:nth-child(${index + 1})`);
   cardEl.classList.add('flipped', 'revealed');
 
+  // Воспроизведение звука переворота карты
+  const flipSound = new Audio('/sounds/cardup.mp3');
+  flipSound.volume = 0.3;
+  flipSound.play().catch(e => console.log('Sound play failed:', e));
+
   // Тактильный отклик
   if (tg.HapticFeedback) {
     tg.HapticFeedback.impactOccurred('light');
@@ -529,6 +534,11 @@ function revealSituationCard(index) {
   if (cardEl) {
     cardEl.classList.add('flipped', 'revealed');
     slot.classList.add('revealed');
+
+    // Воспроизведение звука переворота карты
+    const flipSound = new Audio('/sounds/cardup.mp3');
+    flipSound.volume = 0.3;
+    flipSound.play().catch(e => console.log('Sound play failed:', e));
 
     // Тактильный отклик
     if (tg.HapticFeedback) {
